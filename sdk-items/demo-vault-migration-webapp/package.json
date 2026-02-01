@@ -1,0 +1,28 @@
+{
+  "name": "solutions-migrate-vaults",
+  "version": "2.0.0",
+  "type": "module",
+  "main": "webapp.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start": "node webapp.js"
+  },
+  "keywords": [
+    "1password",
+    "vault",
+    "migration",
+    "transfer"
+  ],
+  "author": "1Password",
+  "license": "ISC",
+  "description": "Professional tool to migrate vaults between 1Password accounts with comprehensive error handling and logging.",
+  "dependencies": {
+    "@1password/sdk": "^0.3.1",
+    "body-parser": "^2.2.2",
+    "ejs": "^4.0.1",
+    "express": "^5.2.1",
+    "express-session": "^1.18.2",
+    "p-limit": "^6.1.0",
+    "selfsigned": "^5.4.0"
+  }
+}
