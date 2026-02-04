@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request New 1Password Vault</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 40px auto; padding: 20px; background: #f9f9f9; }
+        h1 { text-align: center; }
+        form { display: grid; gap: 12px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        label { font-weight: bold; }
+        input, textarea, select { width: 100%; padding: 10px; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        select { cursor: pointer; }
+        button { padding: 12px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 16px; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        #status { margin-top: 20px; padding: 10px; border-radius: 4px; font-weight: bold; text-align: center; display: none; }
+        .success { background: #d4edda; color: #155724; display: block; border: 2px solid #28a745; font-size: 16px; padding: 20px; }
+        .success::before { content: '✅ '; font-size: 24px; margin-right: 8px; }
+        .error { background: #f8d7da; color: #721c24; display: block; border: 2px solid #dc3545; font-size: 16px; padding: 20px; }
+        .error::before { content: '❌ '; font-size: 24px; margin-right: 8px; }
+        .loading { background: #d1ecf1; color: #0c5460; display: block; border: 2px solid #17a2b8; font-size: 16px; padding: 20px; }
+        .loading::before { content: '⏳ '; font-size: 24px; margin-right: 8px; }
+        .config-error { background: #fff3cd; color: #856404; padding: 15px; border-radius: 4px; margin-bottom: 20px; text-align: center; }
+        .warning-box { background: #fff3cd; color: #856404; padding: 12px; border-radius: 4px; margin-bottom: 12px; font-size: 13px; border: 1px solid #ffc107; }
+        .assignment-section { background: #f8f9fa; padding: 15px; border-radius: 4px; margin-bottom: 15px; border: 2px solid #dee2e6; }
+        .assignment-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .assignment-badge { background: #007bff; color: white; padding: 4px 12px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .filter-input { margin-bottom: 10px; padding: 8px; border: 2px solid #007bff; border-radius: 4px; }
+        .assignee-list { max-height: 300px; overflow-y: auto; border: 1px solid #ccc; border-radius: 4px; padding: 10px; background: white; }
+        .assignee-item { display: flex; align-items: center; padding: 8px; margin-bottom: 6px; background: #f8f9fa; border-radius: 4px; border: 1px solid #dee2e6; }
+        .assignee-item:hover { background: #e9ecef; }
+        .assignee-item.selected { background: #d4edda; border-color: #28a745; }
+        .assignee-checkbox { margin: 0; margin-right: 10px; width: auto !important; flex-shrink: 0; }
+        .assignee-name { flex: 1; font-size: 14px; }
+        .assignee-email { font-size: 12px; color: #666; margin-left: 5px; }
+        .permission-select { margin-left: auto; padding: 4px 8px; font-size: 12px; width: auto; min-width: 150px; }
+        .selected-summary { background: #e7f3ff; padding: 10px; border-radius: 4px; margin-top: 10px; border: 1px solid #007bff; }
+        .summary-item { display: flex; justify-content: space-between; align-items: center; padding: 5px 0; font-size: 13px; }
+        .remove-btn { background: #dc3545; color: white; border: none; padding: 2px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; }
+        .remove-btn:hover { background: #c82333; }
+        .no-results { padding: 20px; text-align: center; color: #666; font-style: italic; }
+        .permission-preset { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+        .preset-btn { padding: 6px 12px; font-size: 12px; background: #6c757d; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        .preset-btn:hover { background: #5a6268; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5); }
+        .modal-content { background-color: #fefefe; margin: 5% auto; padding: 30px; border: 1px solid #888; border-radius: 8px; width: 90%; max-width: 700px; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #dee2e6; }
+        .modal-header h2 { margin: 0; color: #007bff; }
+        .close { color: #aaa; font-size: 35px; font-weight: bold; cursor: pointer; line-height: 1; }
+        .close:hover, .close:focus { color: #000; }
+        .permission-grid { display: grid; gap: 12px; }
+        .permission-item { background: #f8f9fa; padding: 12px; border-radius: 4px; border: 1px solid #dee2e6; }
+        .permission-item label { display: flex; align-items: start; cursor: pointer; font-weight: normal; }
+        .permission-item input[type="checkbox"] { width: auto !important; margin-right: 10px; margin-top: 3px; flex-shrink: 0; }
+        .permission-title { font-weight: bold; color: #333; }
+        .permission-description { font-size: 12px; color: #666; margin-top: 4px; margin-left: 28px; }
+        .modal-footer { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; padding-top: 15px; border-top: 2px solid #dee2e6; }
+        .modal-btn { padding: 10px 20px; border: none; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; }
+        .modal-btn-primary { background: #007bff; color: white; }
+        .modal-btn-primary:hover { background: #0056b3; }
+        .modal-btn-secondary { background: #6c757d; color: white; }
+        .modal-btn-secondary:hover { background: #5a6268; }
+        .permission-preset-in-modal { display: flex; gap: 10px; margin-bottom: 20px; padding: 15px; background: #e7f3ff; border-radius: 4px; }
+        .permission-preset-in-modal button { flex: 1; padding: 8px; border: none; border-radius: 4px; background: #007bff; color: white; cursor: pointer; font-size: 13px; }
+        .permission-preset-in-modal button:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+    <h1>Request a New 1Password Vault</h1>
+    
+    <div id="configError" class="config-error" style="display: none;">
+        ⚠️ API URL not configured. Please update the CLOUDFRONT_URL variable in this HTML file.
+    </div>
+    
+    <div id="loadingWarning" class="warning-box" style="display: none;">
+        ⏳ Loading users and groups...
+    </div>
+    
+    <div id="status"></div>
+    
+    <form id="vaultForm">
+        <label for="vaultName">Vault Name (required, must be unique):</label>
+        <input type="text" id="vaultName" name="vaultName" required>
+
+        <label for="description">Description (optional):</label>
+        <textarea id="description" name="description" rows="3"></textarea>
+
+        <label for="requesterName">Your Name:</label>
+        <input type="text" id="requesterName" name="requesterName" required>
+
+        <label for="requesterEmail">Your Email (for notifications):</label>
+        <input type="email" id="requesterEmail" name="requesterEmail" required>
+
+        <label for="reason">Reason (optional):</label>
+        <textarea id="reason" name="reason" rows="3"></textarea>
+
+        <div class="assignment-section">
+            <div class="assignment-header">
+                <label style="margin: 0;">Assign Groups:</label>
+                <span class="assignment-badge" id="groupsBadge">0 selected</span>
+            </div>
+            <input type="text" id="groupsFilter" class="filter-input" placeholder="🔍 Filter groups by name...">
+            <div class="assignee-list" id="groupsList"><div class="no-results">Loading groups...</div></div>
+            <div class="permission-preset">
+                <button type="button" class="preset-btn" onclick="applyPresetToGroups('read-only')">📖 Read-Only</button>
+                <button type="button" class="preset-btn" onclick="applyPresetToGroups('editor')">✏️ Editor</button>
+                <button type="button" class="preset-btn" onclick="applyPresetToGroups('manager')">👑 Manager</button>
+            </div>
+            <div id="groupsSummary" class="selected-summary" style="display: none;"></div>
+        </div>
+
+        <div class="assignment-section">
+            <div class="assignment-header">
+                <label style="margin: 0;">Assign Users:</label>
+                <span class="assignment-badge" id="usersBadge">0 selected</span>
+            </div>
+            <input type="text" id="usersFilter" class="filter-input" placeholder="🔍 Filter users by name or email...">
+            <div class="assignee-list" id="usersList"><div class="no-results">Loading users...</div></div>
+            <div class="permission-preset">
+                <button type="button" class="preset-btn" onclick="applyPresetToUsers('read-only')">📖 Read-Only</button>
+                <button type="button" class="preset-btn" onclick="applyPresetToUsers('editor')">✏️ Editor</button>
+                <button type="button" class="preset-btn" onclick="applyPresetToUsers('manager')">👑 Manager</button>
+            </div>
+            <div id="usersSummary" class="selected-summary" style="display: none;"></div>
+        </div>
+
+        <div style="background: #fff3cd; padding: 15px; border-radius: 4px; margin-bottom: 12px; border: 1px solid #ffc107;">
+            <label style="font-weight: normal; display: flex; align-items: start; cursor: pointer;">
+                <input type="checkbox" id="revokeAdmins" name="revokeAdmins" value="true" style="width: auto; margin-right: 8px; margin-top: 3px;">
+                <span><strong>Revoke Administrators Group Access</strong> - Remove the Administrators group from this vault</span>
+            </label>
+        </div>
+
+        <button type="submit" id="submitBtn">Submit Request</button>
+    </form>
+
+    <div id="permissionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>🔧 Custom Permissions</h2>
+                <span class="close" onclick="closePermissionModal()">&times;</span>
+            </div>
+            <div id="modalAssigneeName" style="background: #e7f3ff; padding: 10px; border-radius: 4px; margin-bottom: 15px; font-weight: bold;"></div>
+            <div class="permission-preset-in-modal">
+                <button type="button" onclick="modalApplyPreset('read-only')">📖 Read-Only</button>
+                <button type="button" onclick="modalApplyPreset('editor')">✏️ Editor</button>
+                <button type="button" onclick="modalApplyPreset('manager')">👑 Manager</button>
+            </div>
+            <div class="permission-grid" id="modalPermissionGrid">
+                <div class="permission-item"><label><input type="checkbox" value="view_items"><div><div class="permission-title">View Items</div><div class="permission-description">View items in a vault</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="view_and_copy_passwords"><div><div class="permission-title">View and Copy Passwords</div><div class="permission-description">View concealed passwords</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="create_items"><div><div class="permission-title">Create Items</div><div class="permission-description">Create new items</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="edit_items"><div><div class="permission-title">Edit Items</div><div class="permission-description">Modify existing items</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="archive_items"><div><div class="permission-title">Archive Items</div><div class="permission-description">Archive items</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="delete_items"><div><div class="permission-title">Delete Items</div><div class="permission-description">Permanently delete items</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="view_item_history"><div><div class="permission-title">View Item History</div><div class="permission-description">View previous versions</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="import_items"><div><div class="permission-title">Import Items</div><div class="permission-description">Import from other sources</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="export_items"><div><div class="permission-title">Export Items</div><div class="permission-description">Export to file</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="copy_and_share_items"><div><div class="permission-title">Copy and Share Items</div><div class="permission-description">Share with others</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="print_items"><div><div class="permission-title">Print Items</div><div class="permission-description">Print contents</div></div></label></div>
+                <div class="permission-item"><label><input type="checkbox" value="manage_vault"><div><div class="permission-title">Manage Vault</div><div class="permission-description">Full vault management</div></div></label></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="modal-btn modal-btn-secondary" onclick="closePermissionModal()">Cancel</button>
+                <button type="button" class="modal-btn modal-btn-primary" onclick="saveCustomPermissions()">Save Permissions</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION: Update this with your CloudFront URL
+        // ============================================================
+        const CLOUDFRONT_URL = 'https://YOUR-CLOUDFRONT-URL.cloudfront.net';
+        
+        const form = document.getElementById('vaultForm');
+        const status = document.getElementById('status');
+        const submitBtn = document.getElementById('submitBtn');
+        const configError = document.getElementById('configError');
+        const loadingWarning = document.getElementById('loadingWarning');
+
+        let users = [];
+        let groups = [];
+        let selectedGroups = new Map();
+        let selectedUsers = new Map();
+        let currentModalTarget = null;
+
+        const permissionDependencies = {
+            'view_items': [],
+            'create_items': ['view_items'],
+            'edit_items': ['view_items', 'view_and_copy_passwords'],
+            'archive_items': ['view_items', 'edit_items', 'view_and_copy_passwords'],
+            'delete_items': ['view_items', 'edit_items', 'view_and_copy_passwords'],
+            'view_and_copy_passwords': ['view_items'],
+            'view_item_history': ['view_items', 'view_and_copy_passwords'],
+            'import_items': ['view_items', 'create_items'],
+            'export_items': ['view_items', 'view_item_history', 'view_and_copy_passwords'],
+            'copy_and_share_items': ['view_items', 'view_item_history', 'view_and_copy_passwords'],
+            'print_items': ['view_items', 'view_and_copy_passwords', 'view_item_history'],
+            'manage_vault': []
+        };
+
+        const reverseDependencies = {};
+        Object.keys(permissionDependencies).forEach(permission => { reverseDependencies[permission] = []; });
+        Object.entries(permissionDependencies).forEach(([permission, deps]) => {
+            deps.forEach(dep => {
+                if (!reverseDependencies[dep]) reverseDependencies[dep] = [];
+                reverseDependencies[dep].push(permission);
+            });
+        });
+
+        const permissionPresets = {
+            'read-only': ['view_items', 'view_and_copy_passwords'],
+            'editor': ['view_items', 'view_and_copy_passwords', 'create_items', 'edit_items', 'archive_items'],
+            'manager': ['view_items', 'view_and_copy_passwords', 'create_items', 'edit_items', 'archive_items', 'delete_items', 'view_item_history', 'import_items', 'copy_and_share_items', 'manage_vault']
+        };
+
+        if (!CLOUDFRONT_URL || CLOUDFRONT_URL === 'https://YOUR-CLOUDFRONT-URL.cloudfront.net' || !CLOUDFRONT_URL.startsWith('https://')) {
+            configError.style.display = 'block';
+            configError.innerHTML = '⚠️ <strong>Configuration Required</strong><br>Please update the <code>CLOUDFRONT_URL</code> variable in this HTML file with your CloudFront URL.';
+            submitBtn.disabled = true;
+        }
+
+        async function loadUsersAndGroups() {
+            loadingWarning.style.display = 'block';
+            let usersLoaded = false, groupsLoaded = false;
+            try {
+                const usersResponse = await fetch('users.json');
+                if (usersResponse.ok) {
+                    users = await usersResponse.json();
+                    usersLoaded = true;
+                    renderUsers();
+                }
+            } catch (err) { console.error('Error loading users.json:', err); }
+            try {
+                const groupsResponse = await fetch('groups.json');
+                if (groupsResponse.ok) {
+                    groups = await groupsResponse.json();
+                    groupsLoaded = true;
+                    renderGroups();
+                }
+            } catch (err) { console.error('Error loading groups.json:', err); }
+            if (usersLoaded && groupsLoaded) loadingWarning.style.display = 'none';
+            else loadingWarning.innerHTML = '⚠️ Could not load users/groups.';
+        }
+
+        function renderGroups(filterText = '') {
+            const groupsList = document.getElementById('groupsList');
+            const filter = filterText.toLowerCase();
+            const filteredGroups = groups.filter(group => (group.name || '').toLowerCase().includes(filter));
+            if (filteredGroups.length === 0) { groupsList.innerHTML = '<div class="no-results">No groups found</div>'; return; }
+            groupsList.innerHTML = filteredGroups.map(group => {
+                const isSelected = selectedGroups.has(group.id);
+                const currentPerms = isSelected ? selectedGroups.get(group.id).permissions : 'read-only';
+                return `<div class="assignee-item ${isSelected ? 'selected' : ''}" id="group-${group.id}">
+                    <input type="checkbox" class="assignee-checkbox" data-type="group" data-id="${group.id}" data-name="${group.name || group.id}" ${isSelected ? 'checked' : ''} onchange="toggleGroup(this)">
+                    <span class="assignee-name">${group.name || group.id}</span>
+                    <select class="permission-select" data-type="group" data-id="${group.id}" onchange="updateGroupPermissions(this)" ${!isSelected ? 'disabled' : ''}>
+                        <option value="read-only" ${currentPerms === 'read-only' ? 'selected' : ''}>📖 Read-Only</option>
+                        <option value="editor" ${currentPerms === 'editor' ? 'selected' : ''}>✏️ Editor</option>
+                        <option value="manager" ${currentPerms === 'manager' ? 'selected' : ''}>👑 Manager</option>
+                        <option value="custom" ${currentPerms === 'custom' ? 'selected' : ''}>🔧 Custom</option>
+                    </select></div>`;
+            }).join('');
+            updateGroupsSummary();
+        }
+
+        function renderUsers(filterText = '') {
+            const usersList = document.getElementById('usersList');
+            const filter = filterText.toLowerCase();
+            const filteredUsers = users.filter(user => (user.name || '').toLowerCase().includes(filter) || (user.email || '').toLowerCase().includes(filter));
+            if (filteredUsers.length === 0) { usersList.innerHTML = '<div class="no-results">No users found</div>'; return; }
+            usersList.innerHTML = filteredUsers.map(user => {
+                const isSelected = selectedUsers.has(user.email);
+                const currentPerms = isSelected ? selectedUsers.get(user.email).permissions : 'read-only';
+                return `<div class="assignee-item ${isSelected ? 'selected' : ''}" id="user-${user.email}">
+                    <input type="checkbox" class="assignee-checkbox" data-type="user" data-id="${user.email}" data-name="${user.name || user.email}" ${isSelected ? 'checked' : ''} onchange="toggleUser(this)">
+                    <span class="assignee-name">${user.name || user.email} <span class="assignee-email">${user.email}</span></span>
+                    <select class="permission-select" data-type="user" data-id="${user.email}" onchange="updateUserPermissions(this)" ${!isSelected ? 'disabled' : ''}>
+                        <option value="read-only" ${currentPerms === 'read-only' ? 'selected' : ''}>📖 Read-Only</option>
+                        <option value="editor" ${currentPerms === 'editor' ? 'selected' : ''}>✏️ Editor</option>
+                        <option value="manager" ${currentPerms === 'manager' ? 'selected' : ''}>👑 Manager</option>
+                        <option value="custom" ${currentPerms === 'custom' ? 'selected' : ''}>🔧 Custom</option>
+                    </select></div>`;
+            }).join('');
+            updateUsersSummary();
+        }
+
+        function toggleGroup(checkbox) {
+            const id = checkbox.dataset.id, name = checkbox.dataset.name;
+            const select = checkbox.parentElement.querySelector('.permission-select');
+            if (checkbox.checked) { selectedGroups.set(id, { id, name, permissions: 'read-only' }); select.disabled = false; checkbox.parentElement.classList.add('selected'); }
+            else { selectedGroups.delete(id); select.disabled = true; checkbox.parentElement.classList.remove('selected'); }
+            updateGroupsSummary();
+        }
+
+        function toggleUser(checkbox) {
+            const email = checkbox.dataset.id, name = checkbox.dataset.name;
+            const select = checkbox.parentElement.querySelector('.permission-select');
+            if (checkbox.checked) { selectedUsers.set(email, { email, name, permissions: 'read-only' }); select.disabled = false; checkbox.parentElement.classList.add('selected'); }
+            else { selectedUsers.delete(email); select.disabled = true; checkbox.parentElement.classList.remove('selected'); }
+            updateUsersSummary();
+        }
+
+        function updateGroupPermissions(select) {
+            const id = select.dataset.id;
+            if (!selectedGroups.has(id)) return;
+            const group = selectedGroups.get(id);
+            if (select.value === 'custom') openPermissionModal('group', id, group.name, group.customPermissions || []);
+            else { group.permissions = select.value; delete group.customPermissions; selectedGroups.set(id, group); updateGroupsSummary(); }
+        }
+
+        function updateUserPermissions(select) {
+            const email = select.dataset.id;
+            if (!selectedUsers.has(email)) return;
+            const user = selectedUsers.get(email);
+            if (select.value === 'custom') openPermissionModal('user', email, user.name, user.customPermissions || []);
+            else { user.permissions = select.value; delete user.customPermissions; selectedUsers.set(email, user); updateUsersSummary(); }
+        }
+
+        function openPermissionModal(type, id, name, currentPermissions = []) {
+            currentModalTarget = { type, id };
+            const modal = document.getElementById('permissionModal');
+            document.getElementById('modalAssigneeName').textContent = `Setting permissions for: ${name}`;
+            modal.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = currentPermissions.includes(cb.value); });
+            initializePermissionDependencies();
+            modal.style.display = 'block';
+        }
+
+        function closePermissionModal() {
+            document.getElementById('permissionModal').style.display = 'none';
+            if (currentModalTarget) {
+                const {type, id} = currentModalTarget;
+                if (type === 'group' && selectedGroups.has(id)) {
+                    const group = selectedGroups.get(id);
+                    if (!group.customPermissions) renderGroups(document.getElementById('groupsFilter').value);
+                } else if (type === 'user' && selectedUsers.has(id)) {
+                    const user = selectedUsers.get(id);
+                    if (!user.customPermissions) renderUsers(document.getElementById('usersFilter').value);
+                }
+            }
+            currentModalTarget = null;
+        }
+
+        function saveCustomPermissions() {
+            if (!currentModalTarget) return;
+            const modal = document.getElementById('permissionModal');
+            const selectedPerms = Array.from(modal.querySelectorAll('input[type="checkbox"]:checked')).map(cb => cb.value);
+            if (selectedPerms.length === 0) { alert('Please select at least one permission.'); return; }
+            const {type, id} = currentModalTarget;
+            if (type === 'group') { const group = selectedGroups.get(id); group.permissions = 'custom'; group.customPermissions = selectedPerms; selectedGroups.set(id, group); updateGroupsSummary(); }
+            else if (type === 'user') { const user = selectedUsers.get(id); user.permissions = 'custom'; user.customPermissions = selectedPerms; selectedUsers.set(id, user); updateUsersSummary(); }
+            closePermissionModal();
+        }
+
+        function modalApplyPreset(preset) {
+            const perms = permissionPresets[preset] || [];
+            const modal = document.getElementById('permissionModal');
+            modal.querySelectorAll('input[type="checkbox"]').forEach(cb => { cb.checked = perms.includes(cb.value); });
+        }
+
+        function initializePermissionDependencies() {
+            const modal = document.getElementById('permissionModal');
+            const checkboxes = modal.querySelectorAll('input[type="checkbox"]');
+            checkboxes.forEach(checkbox => { const newCheckbox = checkbox.cloneNode(true); checkbox.parentNode.replaceChild(newCheckbox, checkbox); });
+            const newCheckboxes = modal.querySelectorAll('input[type="checkbox"]');
+            newCheckboxes.forEach(checkbox => { checkbox.addEventListener('change', function() { handlePermissionChange(this); }); });
+        }
+
+        function handlePermissionChange(checkbox) {
+            const modal = document.getElementById('permissionModal');
+            if (checkbox.checked) {
+                const dependencies = permissionDependencies[checkbox.value] || [];
+                dependencies.forEach(dep => {
+                    const depCheckbox = modal.querySelector(`input[value="${dep}"]`);
+                    if (depCheckbox && !depCheckbox.checked) { depCheckbox.checked = true; handlePermissionChange(depCheckbox); }
+                });
+            } else {
+                const dependents = reverseDependencies[checkbox.value] || [];
+                dependents.forEach(dependent => {
+                    const dependentCheckbox = modal.querySelector(`input[value="${dependent}"]`);
+                    if (dependentCheckbox && dependentCheckbox.checked) { dependentCheckbox.checked = false; handlePermissionChange(dependentCheckbox); }
+                });
+            }
+        }
+
+        window.onclick = function(event) { if (event.target == document.getElementById('permissionModal')) closePermissionModal(); }
+
+        function updateGroupsSummary() {
+            const badge = document.getElementById('groupsBadge'), summary = document.getElementById('groupsSummary');
+            badge.textContent = `${selectedGroups.size} selected`;
+            if (selectedGroups.size === 0) { summary.style.display = 'none'; return; }
+            summary.style.display = 'block';
+            summary.innerHTML = '<strong>Selected Groups:</strong><br>' + Array.from(selectedGroups.values()).map(group => 
+                `<div class="summary-item"><span>${group.name} - ${getPermissionLabel(group.permissions, group.customPermissions)}</span>
+                <button type="button" class="remove-btn" onclick="removeGroup('${group.id}')">Remove</button></div>`).join('');
+        }
+
+        function updateUsersSummary() {
+            const badge = document.getElementById('usersBadge'), summary = document.getElementById('usersSummary');
+            badge.textContent = `${selectedUsers.size} selected`;
+            if (selectedUsers.size === 0) { summary.style.display = 'none'; return; }
+            summary.style.display = 'block';
+            summary.innerHTML = '<strong>Selected Users:</strong><br>' + Array.from(selectedUsers.values()).map(user => 
+                `<div class="summary-item"><span>${user.name} - ${getPermissionLabel(user.permissions, user.customPermissions)}</span>
+                <button type="button" class="remove-btn" onclick="removeUser('${user.email}')">Remove</button></div>`).join('');
+        }
+
+        function removeGroup(id) { selectedGroups.delete(id); renderGroups(document.getElementById('groupsFilter').value); }
+        function removeUser(email) { selectedUsers.delete(email); renderUsers(document.getElementById('usersFilter').value); }
+        function getPermissionLabel(preset, customPerms = null) {
+            if (preset === 'custom' && customPerms) return `🔧 Custom (${customPerms.length} permissions)`;
+            const labels = { 'read-only': '📖 Read-Only', 'editor': '✏️ Editor', 'manager': '👑 Manager', 'custom': '🔧 Custom' };
+            return labels[preset] || preset;
+        }
+        function applyPresetToGroups(preset) { selectedGroups.forEach((group, id) => { group.permissions = preset; selectedGroups.set(id, group); }); renderGroups(document.getElementById('groupsFilter').value); }
+        function applyPresetToUsers(preset) { selectedUsers.forEach((user, email) => { user.permissions = preset; selectedUsers.set(email, user); }); renderUsers(document.getElementById('usersFilter').value); }
+
+        document.getElementById('groupsFilter').addEventListener('input', (e) => { renderGroups(e.target.value); });
+        document.getElementById('usersFilter').addEventListener('input', (e) => { renderUsers(e.target.value); });
+
+        loadUsersAndGroups();
+
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (selectedGroups.size === 0 && selectedUsers.size === 0) {
+                status.textContent = 'Please select at least one group or user.';
+                status.className = 'error';
+                status.style.display = 'block';
+                return;
+            }
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Submitting...';
+            status.textContent = 'Submitting your request...';
+            status.className = 'loading';
+            status.style.display = 'block';
+
+            const formData = new FormData(form);
+            const assignments = [];
+            selectedGroups.forEach(group => { assignments.push({ type: 'group', id: group.id, name: group.name, permissions: group.customPermissions || permissionPresets[group.permissions] || permissionPresets['read-only'] }); });
+            selectedUsers.forEach(user => { assignments.push({ type: 'user', id: user.email, name: user.name, permissions: user.customPermissions || permissionPresets[user.permissions] || permissionPresets['read-only'] }); });
+            const data = {
+                vaultName: formData.get('vaultName'),
+                description: formData.get('description'),
+                requesterName: formData.get('requesterName'),
+                requesterEmail: formData.get('requesterEmail'),
+                reason: formData.get('reason'),
+                revokeAdmins: document.getElementById('revokeAdmins').checked,
+                assignments: assignments
+            };
+
+            try {
+                const resp = await fetch(`${CLOUDFRONT_URL}/prod/requests`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(data)
+                });
+                const result = await resp.json();
+                if (resp.ok) {
+                    status.textContent = 'Request submitted successfully! You will receive an email confirmation shortly.';
+                    status.className = 'success';
+                    status.style.display = 'block';
+                    setTimeout(() => { form.reset(); selectedGroups.clear(); selectedUsers.clear(); renderGroups(); renderUsers(); }, 500);
+                } else {
+                    status.textContent = result.message || 'Error submitting request. Please try again.';
+                    status.className = 'error';
+                    status.style.display = 'block';
+                }
+            } catch (err) {
+                console.error('Error:', err);
+                status.textContent = 'Network error – unable to reach server.';
+                status.className = 'error';
+                status.style.display = 'block';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Submit Request';
+            }
+        });
+    </script>
+</body>
+</html>
