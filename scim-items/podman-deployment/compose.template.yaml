@@ -1,0 +1,38 @@
+services:
+  redis:
+    image: redis:latest
+    container_name: op-scim-redis
+    command: --maxmemory 256mb --maxmemory-policy volatile-lru --save ""
+    networks:
+      - op-scim
+    user: "999:999"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+    mem_limit: 512m
+    cpus: 0.125
+
+  scim:
+    image: 1password/scim:v2.9.13
+    container_name: op-scim-bridge
+    depends_on:
+      - redis
+    env_file: ./scim.env
+    environment:
+      - OP_REDIS_URL=redis://redis:6379
+    networks:
+      - op-scim
+    ports:
+      - "443:8443"
+    user: "999:999"
+    volumes:
+      - ./scimsession:/home/opuser/.op/scimsession:ro,Z
+    mem_limit: 512m
+    cpus: 0.125
+    restart: unless-stopped
+
+networks:
+  op-scim:
+    driver: bridge
