@@ -1,0 +1,1492 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔐 Secure 1Password Item Creator</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container { 
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 40px;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            margin-bottom: 10px;
+            font-size: 28px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .security-badge {
+            background: #27ae60;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            margin-bottom: 30px;
+        }
+        
+        .security-notice {
+            background: #e8f5e9;
+            border-left: 4px solid #27ae60;
+            padding: 15px;
+            margin-bottom: 30px;
+            border-radius: 4px;
+        }
+        
+        .security-notice strong {
+            color: #27ae60;
+            display: block;
+            margin-bottom: 8px;
+        }
+        
+        .security-notice ul {
+            margin-left: 20px;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        
+        .form-group {
+            margin-bottom: 25px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            color: #34495e;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+        
+        input[type="text"],
+        input[type="email"],
+        input[type="password"],
+        input[type="url"],
+        input[type="tel"],
+        textarea,
+        select {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+        
+        input:focus,
+        textarea:focus,
+        select:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .helper-text {
+            font-size: 12px;
+            color: #7f8c8d;
+            margin-top: 5px;
+        }
+        
+        .category-selector {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+            margin-bottom: 30px;
+        }
+        
+        .category-btn {
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .category-btn:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .category-btn.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+        
+        .category-icon {
+            font-size: 24px;
+        }
+        
+        .dynamic-form {
+            display: none;
+            animation: fadeIn 0.3s;
+        }
+        
+        .dynamic-form.active {
+            display: block;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .password-field {
+            position: relative;
+        }
+        
+        .toggle-visibility {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            padding: 5px;
+            line-height: 1;
+            z-index: 10;
+        }
+        
+        .password-field input {
+            padding-right: 45px;
+        }
+        
+        .tags-input {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            padding: 8px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            min-height: 46px;
+        }
+        
+        .tags-input:focus-within {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .tag {
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .tag-remove {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0;
+            display: flex;
+            align-items: center;
+        }
+        
+        .tag-input {
+            flex: 1;
+            border: none;
+            outline: none;
+            min-width: 100px;
+            padding: 4px;
+            font-size: 14px;
+        }
+        
+        .file-upload {
+            border: 2px dashed #e0e0e0;
+            border-radius: 8px;
+            padding: 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        .file-upload:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .file-upload.dragover {
+            border-color: #667eea;
+            background: #e8f0ff;
+        }
+        
+        .file-list {
+            margin-top: 15px;
+        }
+        
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: #f5f5f5;
+            border-radius: 6px;
+            margin-bottom: 8px;
+        }
+        
+        .file-info {
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+        }
+        
+        .file-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: #2c3e50;
+        }
+        
+        .file-size {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+        
+        .file-remove {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        
+        .submit-btn {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-top: 30px;
+        }
+        
+        .submit-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.5);
+        }
+        
+        .submit-btn:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            display: none;
+            animation: slideIn 0.3s;
+        }
+        
+        @keyframes slideIn {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+        }
+        
+        .status.loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 2px solid #bee5eb;
+        }
+        
+        .encryption-status {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            font-size: 13px;
+            font-weight: 600;
+            z-index: 1000;
+        }
+        
+        .encryption-status.ready {
+            border-left: 4px solid #27ae60;
+            color: #27ae60;
+        }
+        
+        .encryption-status.loading {
+            border-left: 4px solid #f39c12;
+            color: #f39c12;
+        }
+        
+        .encryption-status.error {
+            border-left: 4px solid #e74c3c;
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="encryption-status loading" id="encryptionStatus">
+        🔒 Loading encryption...
+    </div>
+
+    <div class="container">
+        <h1>
+            🔐 Secure Item Creator
+            <span class="security-badge">ENCRYPTED</span>
+        </h1>
+        <p class="subtitle">Create items securely with client-side encryption</p>
+
+        <div class="security-notice">
+            <strong>🛡️ Your Data is Protected:</strong>
+            <ul>
+                <li>All sensitive data is encrypted in your browser before transmission</li>
+                <li>AWS administrators cannot see your passwords or secrets</li>
+                <li>End-to-end encryption using RSA-2048</li>
+            </ul>
+        </div>
+
+        <form id="itemForm">
+            <!-- Category Selection -->
+            <div class="form-group">
+                <label>Item Category:</label>
+                <div class="category-selector">
+                    <button type="button" class="category-btn active" onclick="selectCategory('Login')" data-category="Login">
+                        <span class="category-icon">🔑</span>
+                        <span>Login</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('SecureNote')" data-category="SecureNote">
+                        <span class="category-icon">📝</span>
+                        <span>Secure Note</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('CreditCard')" data-category="CreditCard">
+                        <span class="category-icon">💳</span>
+                        <span>Credit Card</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('ApiCredentials')" data-category="ApiCredentials">
+                        <span class="category-icon">🔐</span>
+                        <span>API Key</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('Database')" data-category="Database">
+                        <span class="category-icon">🗄️</span>
+                        <span>Database</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('Server')" data-category="Server">
+                        <span class="category-icon">🖥️</span>
+                        <span>Server</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('Router')" data-category="Router">
+                        <span class="category-icon">📡</span>
+                        <span>Router</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('SoftwareLicense')" data-category="SoftwareLicense">
+                        <span class="category-icon">🎫</span>
+                        <span>License</span>
+                    </button>
+                    <button type="button" class="category-btn" onclick="selectCategory('Document')" data-category="Document">
+                        <span class="category-icon">📄</span>
+                        <span>Document</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Common Fields -->
+            <div class="form-group">
+                <label for="itemTitle">Item Title: *</label>
+                <input type="text" id="itemTitle" required placeholder="Enter item title">
+            </div>
+
+            <!-- Login Fields -->
+            <div id="loginForm" class="dynamic-form active">
+                <div class="form-group">
+                    <label for="loginUsername">Username:</label>
+                    <input type="text" id="loginUsername" placeholder="Enter username or email">
+                </div>
+
+                <div class="form-group password-field">
+                    <label for="loginPassword">Password: *</label>
+                    <input type="password" id="loginPassword" placeholder="Enter password">
+                    <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('loginPassword')">👁️</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="loginUrl">Website URL:</label>
+                    <input type="url" id="loginUrl" placeholder="https://example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="loginNotes">Notes:</label>
+                    <textarea id="loginNotes" rows="3" placeholder="Additional notes..."></textarea>
+                </div>
+            </div>
+
+            <!-- Secure Note Fields -->
+            <div id="secureNoteForm" class="dynamic-form">
+                <div class="form-group">
+                    <label for="noteContent">Note Content: *</label>
+                    <textarea id="noteContent" rows="12" placeholder="Enter your secure note here...
+                    
+You can write multiple paragraphs, save important information, or store any text securely." style="min-height: 250px; resize: vertical;"></textarea>
+                </div>
+            </div>
+
+            <!-- Credit Card Fields -->
+            <div id="creditCardForm" class="dynamic-form">
+                <!-- Main Card Details -->
+                <div class="form-group">
+                    <label for="cardholderName">Cardholder Name:</label>
+                    <input type="text" id="cardholderName" placeholder="John Doe">
+                </div>
+
+                <div class="form-group">
+                    <label for="cardType">Type:</label>
+                    <select id="cardType">
+                        <option value="">Select card type...</option>
+                        <option value="visa">Visa</option>
+                        <option value="mc">Mastercard</option>
+                        <option value="amex">American Express</option>
+                        <option value="discover">Discover</option>
+                        <option value="diners">Diners Club</option>
+                        <option value="jcb">JCB</option>
+                        <option value="unionpay">UnionPay</option>
+                        <option value="maestro">Maestro</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="cardNumber">Number: *</label>
+                    <input type="text" id="cardNumber" placeholder="4124 0000 0000 2134" maxlength="19">
+                </div>
+
+                <div class="form-group password-field">
+                    <label for="cvv">Verification Number (CVV):</label>
+                    <input type="password" id="cvv" placeholder="123" maxlength="4">
+                    <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('cvv')">👁️</button>
+                </div>
+
+                <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    <div>
+                        <label for="expiryDate">Expiry Date:</label>
+                        <input type="text" id="expiryDate" placeholder="MM/YY" maxlength="5">
+                    </div>
+                    <div>
+                        <label for="validFrom">Valid From:</label>
+                        <input type="text" id="validFrom" placeholder="MM/YY" maxlength="5">
+                    </div>
+                </div>
+
+                <!-- Contact Information Section -->
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #667eea; margin-bottom: 15px;">📞 Contact Information</h3>
+                    
+                    <div class="form-group">
+                        <label for="issuingBank">Issuing Bank:</label>
+                        <input type="text" id="issuingBank" placeholder="Chase Bank">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phoneLocal">Phone (Local):</label>
+                        <input type="tel" id="phoneLocal" placeholder="(555) 123-4567">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phoneTollFree">Phone (Toll Free):</label>
+                        <input type="tel" id="phoneTollFree" placeholder="1-800-555-0000">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="phoneIntl">Phone (International):</label>
+                        <input type="tel" id="phoneIntl" placeholder="+1-212-555-0000">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="website">Website:</label>
+                        <input type="url" id="website" placeholder="https://example.com">
+                    </div>
+                </div>
+
+                <!-- Additional Details Section -->
+                <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #e0e0e0;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #667eea; margin-bottom: 15px;">📋 Additional Details</h3>
+                    
+                    <div class="form-group password-field">
+                        <label for="pin">PIN:</label>
+                        <input type="password" id="pin" placeholder="****" maxlength="8">
+                        <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('pin')">👁️</button>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="creditLimit">Credit Limit:</label>
+                        <input type="text" id="creditLimit" placeholder="$10,000">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="cashLimit">Cash Withdrawal Limit:</label>
+                        <input type="text" id="cashLimit" placeholder="$1,000">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="interestRate">Interest Rate:</label>
+                        <input type="text" id="interestRate" placeholder="18.99%">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="issueNumber">Issue Number:</label>
+                        <input type="text" id="issueNumber" placeholder="01">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="cardNotes">Notes:</label>
+                    <textarea id="cardNotes" rows="3" placeholder="Additional notes..."></textarea>
+                </div>
+            </div>
+
+            <!-- API Credentials Fields -->
+            <div id="apiCredentialsForm" class="dynamic-form">
+                <div class="form-group">
+                    <label for="apiUsername">Username:</label>
+                    <input type="text" id="apiUsername" placeholder="api_username">
+                </div>
+
+                <div class="form-group password-field">
+                    <label for="apiCredential">API Key / Token: *</label>
+                    <input type="password" id="apiCredential" placeholder="sk_live_...">
+                    <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('apiCredential')">👁️</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="apiType">Type:</label>
+                    <select id="apiType">
+                        <option value="">Select type...</option>
+                        <option value="api key">API Key</option>
+                        <option value="bearer token">Bearer Token</option>
+                        <option value="oauth token">OAuth Token</option>
+                        <option value="jwt">JWT</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="apiHostname">Hostname:</label>
+                    <input type="text" id="apiHostname" placeholder="api.example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="apiNotes">Notes:</label>
+                    <textarea id="apiNotes" rows="3" placeholder="Additional notes..."></textarea>
+                </div>
+            </div>
+
+            <!-- Database Fields -->
+            <div id="databaseForm" class="dynamic-form">
+                <div class="form-group">
+                    <label for="databaseType">Database Type:</label>
+                    <select id="databaseType">
+                        <option value="">Select type...</option>
+                        <option value="PostgreSQL">PostgreSQL</option>
+                        <option value="MySQL">MySQL</option>
+                        <option value="MongoDB">MongoDB</option>
+                        <option value="Redis">Redis</option>
+                        <option value="SQL Server">SQL Server</option>
+                        <option value="Oracle">Oracle</option>
+                        <option value="MariaDB">MariaDB</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label for="dbHostname">Server / Hostname: *</label>
+                    <input type="text" id="dbHostname" placeholder="db.example.com">
+                </div>
+
+                <div class="form-group">
+                    <label for="dbPort">Port:</label>
+                    <input type="text" id="dbPort" placeholder="5432">
+                </div>
+
+                <div class="form-group">
+                    <label for="dbDatabase">Database Name:</label>
+                    <input type="text" id="dbDatabase" placeholder="production_db">
+                </div>
+
+                <div class="form-group">
+                    <label for="dbUsername">Username:</label>
+                    <input type="text" id="dbUsername" placeholder="db_user">
+                </div>
+
+                <div class="form-group password-field">
+                    <label for="dbPassword">Password:</label>
+                    <input type="password" id="dbPassword" placeholder="••••••••">
+                    <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('dbPassword')">👁️</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="dbSid">SID:</label>
+                    <input type="text" id="dbSid" placeholder="Oracle SID">
+                    <div class="helper-text">For Oracle databases</div>
+                </div>
+
+                <div class="form-group">
+                    <label for="dbAlias">Alias:</label>
+                    <input type="text" id="dbAlias" placeholder="Database alias">
+                </div>
+
+                <div class="form-group">
+                    <label for="dbNotes">Notes:</label>
+                    <textarea id="dbNotes" rows="3" placeholder="Connection string, SSL settings, etc."></textarea>
+                </div>
+            </div>
+
+            <!-- Server Fields -->
+            <div id="serverForm" class="dynamic-form">
+                <!-- Default Fields (no section) -->
+                <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #667eea; margin-bottom: 15px;">📍 Server Details</h3>
+                    
+                    <div class="form-group">
+                        <label for="serverUrl">URL:</label>
+                        <input type="url" id="serverUrl" placeholder="https://server.example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serverUsername">Username:</label>
+                        <input type="text" id="serverUsername" placeholder="username">
+                    </div>
+
+                    <div class="form-group password-field">
+                        <label for="serverPassword">Password:</label>
+                        <input type="password" id="serverPassword" placeholder="••••••••">
+                        <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('serverPassword')">👁️</button>
+                    </div>
+                </div>
+
+                <!-- Admin Console Section -->
+                <div style="margin-bottom: 20px; padding-bottom: 20px; border-bottom: 1px solid #e0e0e0;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #667eea; margin-bottom: 15px;">🔐 Admin Console</h3>
+                    
+                    <div class="form-group">
+                        <label for="serverAdminUrl">Admin Console URL:</label>
+                        <input type="url" id="serverAdminUrl" placeholder="https://admin.example.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serverAdminUsername">Admin Console Username:</label>
+                        <input type="text" id="serverAdminUsername" placeholder="admin">
+                    </div>
+
+                    <div class="form-group password-field">
+                        <label for="serverAdminPassword">Console Password:</label>
+                        <input type="password" id="serverAdminPassword" placeholder="••••••••">
+                        <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('serverAdminPassword')">👁️</button>
+                    </div>
+                </div>
+
+                <!-- Hosting Provider Section -->
+                <div style="margin-bottom: 20px;">
+                    <h3 style="font-size: 14px; font-weight: 600; color: #667eea; margin-bottom: 15px;">🏢 Hosting Provider</h3>
+                    
+                    <div class="form-group">
+                        <label for="serverProviderName">Name:</label>
+                        <input type="text" id="serverProviderName" placeholder="AWS, DigitalOcean, etc.">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serverProviderWebsite">Website:</label>
+                        <input type="url" id="serverProviderWebsite" placeholder="https://provider.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serverSupportUrl">Support URL:</label>
+                        <input type="url" id="serverSupportUrl" placeholder="https://support.provider.com">
+                    </div>
+
+                    <div class="form-group">
+                        <label for="serverSupportPhone">Support Phone:</label>
+                        <input type="tel" id="serverSupportPhone" placeholder="1-800-555-0000">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="serverNotes">Notes:</label>
+                    <textarea id="serverNotes" rows="3" placeholder="SSH keys, ports, additional info..."></textarea>
+                </div>
+            </div>
+
+            <!-- Router Fields -->
+            <div id="routerForm" class="dynamic-form">
+                <div class="form-group">
+                    <label for="routerName">Base Station Name:</label>
+                    <input type="text" id="routerName" placeholder="Home Router">
+                </div>
+
+                <div class="form-group password-field">
+                    <label for="routerPassword">Base Station Password: *</label>
+                    <input type="password" id="routerPassword" placeholder="••••••••">
+                    <button type="button" class="toggle-visibility" onclick="togglePasswordVisibility('routerPassword')">👁️</button>
+                </div>
+
+                <div class="form-group">
+                    <label for="routerServer">Server / IP Address:</label>
+                    <input type="text" id="routerServer" placeholder="192.168.1.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="routerNotes">Notes:</label>
+                    <textarea id="routerNotes" rows="3" placeholder="WiFi settings, MAC address, etc."></textarea>
+                </div>
+            </div>
+
+            <!-- Software License Fields -->
+            <div id="softwareLicenseForm" class="dynamic-form">
+                <div class="form-group">
+                    <label for="licenseVersion">Version:</label>
+                    <input type="text" id="licenseVersion" placeholder="2024.1">
+                </div>
+
+                <div class="form-group">
+                    <label for="licenseKey">License Key: *</label>
+                    <input type="text" id="licenseKey" placeholder="XXXX-YYYY-ZZZZ-AAAA">
+                </div>
+
+                <div class="form-group">
+                    <label for="licenseNotes">Notes:</label>
+                    <textarea id="licenseNotes" rows="3" placeholder="Purchase date, support info, etc."></textarea>
+                </div>
+            </div>
+
+            <!-- Document Fields -->
+            <div id="documentForm" class="dynamic-form">
+                <div class="form-group">
+                    <label>Document File: *</label>
+                    <div class="file-upload" id="documentFileUpload" onclick="document.getElementById('documentFileInput').click()">
+                        <div style="font-size: 40px; margin-bottom: 10px;">📄</div>
+                        <div style="font-weight: 600; margin-bottom: 5px;">Click to upload document</div>
+                        <div class="helper-text">Required for Document items</div>
+                    </div>
+                    <input type="file" id="documentFileInput" style="display: none;" onchange="handleDocumentFileSelect(event)">
+                    <div class="file-list" id="documentFileList"></div>
+                </div>
+
+                <div class="form-group">
+                    <label for="documentNotes">Notes:</label>
+                    <textarea id="documentNotes" rows="3" placeholder="Document description..."></textarea>
+                </div>
+            </div>
+
+            <!-- Tags -->
+            <div class="form-group">
+                <label>Tags:</label>
+                <div class="tags-input" id="tagsContainer" onclick="focusTagInput()">
+                    <input type="text" class="tag-input" id="tagInput" placeholder="Add tags...">
+                </div>
+                <div class="helper-text">Press Enter to add a tag</div>
+            </div>
+
+            <!-- File Attachments (for non-Document categories) -->
+            <div class="form-group" id="attachmentSection">
+                <label>Attachment (Optional):</label>
+                <div class="file-upload" id="fileUpload" onclick="document.getElementById('fileInput').click()">
+                    <div style="font-size: 40px; margin-bottom: 10px;">📎</div>
+                    <div style="font-weight: 600; margin-bottom: 5px;">Click to upload or drag and drop</div>
+                    <div class="helper-text">Maximum 1 file, 5MB limit</div>
+                </div>
+                <input type="file" id="fileInput" style="display: none;" onchange="handleFileSelect(event)">
+                <div class="file-list" id="fileList"></div>
+            </div>
+
+            <button type="submit" class="submit-btn" id="submitBtn">
+                🔒 Create Encrypted Item
+            </button>
+
+            <div id="status" class="status"></div>
+        </form>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api';
+        window.publicKey = null;
+        let selectedCategory = 'Login';
+        window.tags = [];
+        let attachedFile = null;
+        let documentFile = null;
+        
+        // Initialize encryption
+        (async function() {
+            try {
+                console.log('Fetching public key from:', `${API_BASE}/publickey`);
+                const response = await fetch(`${API_BASE}/publickey`);
+                console.log('Response status:', response.status);
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    console.error('Response error:', errorText);
+                    throw new Error(`Failed to fetch public key: ${response.status} - ${errorText}`);
+                }
+                
+                const data = await response.json();
+                console.log('Public key received, length:', data.publicKey?.length);
+                
+                if (!data.publicKey) {
+                    throw new Error('Public key not found in response');
+                }
+                
+                // Import the public key
+                let publicKeyPem = data.publicKey;
+                if (publicKeyPem.includes('\\n')) {
+                    publicKeyPem = publicKeyPem.replace(/\\n/g, '\n');
+                }
+                
+                const pemHeader = "-----BEGIN PUBLIC KEY-----";
+                const pemFooter = "-----END PUBLIC KEY-----";
+                const pemContents = publicKeyPem
+                    .replace(pemHeader, '')
+                    .replace(pemFooter, '')
+                    .replace(/\s/g, '');
+                
+                const binaryDer = Uint8Array.from(atob(pemContents), c => c.charCodeAt(0));
+                
+                window.publicKey = await crypto.subtle.importKey(
+                    'spki',
+                    binaryDer.buffer,
+                    {
+                        name: 'RSA-OAEP',
+                        hash: 'SHA-256'
+                    },
+                    true,
+                    ['encrypt']
+                );
+                
+                document.getElementById('encryptionStatus').textContent = '🔒 Encryption Ready';
+                document.getElementById('encryptionStatus').className = 'encryption-status ready';
+                
+                console.log('Encryption initialized successfully');
+            } catch (error) {
+                console.error('Encryption initialization failed:', error);
+                document.getElementById('encryptionStatus').textContent = '❌ Encryption Failed';
+                document.getElementById('encryptionStatus').className = 'encryption-status error';
+                alert('Failed to initialize encryption. Please refresh the page. Error: ' + error.message);
+            }
+        })();
+
+        // Category selection
+        function selectCategory(category) {
+            selectedCategory = category;
+            
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.category === category);
+            });
+            
+            document.querySelectorAll('.dynamic-form').forEach(form => {
+                form.classList.remove('active');
+            });
+            
+            // Map category to form ID
+            const formIds = {
+                'Login': 'loginForm',
+                'SecureNote': 'secureNoteForm',
+                'CreditCard': 'creditCardForm',
+                'ApiCredentials': 'apiCredentialsForm',
+                'Database': 'databaseForm',
+                'Server': 'serverForm',
+                'Router': 'routerForm',
+                'SoftwareLicense': 'softwareLicenseForm',
+                'Document': 'documentForm'
+            };
+            
+            document.getElementById(formIds[category]).classList.add('active');
+            
+            // Hide/show attachment section for Document category
+            const attachmentSection = document.getElementById('attachmentSection');
+            if (category === 'Document') {
+                attachmentSection.style.display = 'none';
+            } else {
+                attachmentSection.style.display = 'block';
+            }
+        }
+
+        function togglePasswordVisibility(fieldId) {
+            const field = document.getElementById(fieldId);
+            const button = event.currentTarget;
+            
+            if (field.type === 'password') {
+                field.type = 'text';
+                button.textContent = '🙈';
+            } else {
+                field.type = 'password';
+                button.textContent = '👁️';
+            }
+        }
+
+        function focusTagInput() {
+            document.getElementById('tagInput').focus();
+        }
+
+        function handleTagInput(event) {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                const input = event.target;
+                const tag = input.value.trim();
+                
+                if (tag && !window.tags.includes(tag)) {
+                    window.tags.push(tag);
+                    renderTags();
+                    input.value = '';
+                }
+            } else if (event.key === 'Backspace' && event.target.value === '' && window.tags.length > 0) {
+                window.tags.pop();
+                renderTags();
+            }
+        }
+
+        function renderTags() {
+            const container = document.getElementById('tagsContainer');
+            const input = document.getElementById('tagInput');
+            
+            container.innerHTML = '';
+            
+            window.tags.forEach((tag, index) => {
+                const tagElement = document.createElement('div');
+                tagElement.className = 'tag';
+                tagElement.innerHTML = `
+                    ${tag}
+                    <button type="button" class="tag-remove" onclick="removeTag(${index})">×</button>
+                `;
+                container.appendChild(tagElement);
+            });
+            
+            container.appendChild(input);
+        }
+
+        function removeTag(index) {
+            window.tags.splice(index, 1);
+            renderTags();
+        }
+
+        // Regular file attachment handling
+        const fileUpload = document.getElementById('fileUpload');
+        const fileInput = document.getElementById('fileInput');
+
+        fileUpload.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            fileUpload.classList.add('dragover');
+        });
+
+        fileUpload.addEventListener('dragleave', () => {
+            fileUpload.classList.remove('dragover');
+        });
+
+        fileUpload.addEventListener('drop', (e) => {
+            e.preventDefault();
+            fileUpload.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+
+        function handleFileSelect(event) {
+            handleFiles(event.target.files);
+        }
+
+        function handleFiles(files) {
+            const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
+            
+            if (files.length === 0) return;
+            
+            const file = files[0];
+            
+            if (file.size > MAX_FILE_SIZE) {
+                alert(`${file.name} exceeds 5MB limit (${formatFileSize(file.size)})`);
+                return;
+            }
+            
+            attachedFile = file;
+            renderFiles();
+            fileInput.value = '';
+        }
+
+        function renderFiles() {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = '';
+            
+            if (!attachedFile) return;
+            
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <div class="file-name">📄 ${attachedFile.name}</div>
+                    <div class="file-size">${formatFileSize(attachedFile.size)}</div>
+                </div>
+                <button type="button" class="file-remove" onclick="removeFile()">Remove</button>
+            `;
+            fileList.appendChild(fileItem);
+        }
+
+        function removeFile() {
+            attachedFile = null;
+            renderFiles();
+        }
+
+        // Document file handling
+        function handleDocumentFileSelect(event) {
+            const files = event.target.files;
+            if (files.length === 0) return;
+            
+            documentFile = files[0];
+            renderDocumentFile();
+        }
+
+        function renderDocumentFile() {
+            const fileList = document.getElementById('documentFileList');
+            fileList.innerHTML = '';
+            
+            if (!documentFile) return;
+            
+            const fileItem = document.createElement('div');
+            fileItem.className = 'file-item';
+            fileItem.innerHTML = `
+                <div class="file-info">
+                    <div class="file-name">📄 ${documentFile.name}</div>
+                    <div class="file-size">${formatFileSize(documentFile.size)}</div>
+                </div>
+                <button type="button" class="file-remove" onclick="removeDocumentFile()">Remove</button>
+            `;
+            fileList.appendChild(fileItem);
+        }
+
+        function removeDocumentFile() {
+            documentFile = null;
+            document.getElementById('documentFileInput').value = '';
+            renderDocumentFile();
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        async function encryptData(data) {
+            if (!window.publicKey) {
+                throw new Error('Encryption not initialized - public key is missing');
+            }
+            
+            const jsonString = JSON.stringify(data);
+            
+            // Generate a random AES key
+            const aesKey = await crypto.subtle.generateKey(
+                { name: 'AES-GCM', length: 256 },
+                true,
+                ['encrypt']
+            );
+            
+            // Encrypt the data with AES
+            const iv = crypto.getRandomValues(new Uint8Array(12));
+            const encoder = new TextEncoder();
+            const dataBuffer = encoder.encode(jsonString);
+            
+            const encryptedData = await crypto.subtle.encrypt(
+                { name: 'AES-GCM', iv: iv },
+                aesKey,
+                dataBuffer
+            );
+            
+            // Export the AES key
+            const aesKeyData = await crypto.subtle.exportKey('raw', aesKey);
+            
+            // Encrypt the AES key with RSA
+            const encryptedKey = await crypto.subtle.encrypt(
+                { name: 'RSA-OAEP' },
+                window.publicKey,
+                aesKeyData
+            );
+            
+            // Combine: [encryptedKey length (4 bytes)][encryptedKey][iv (12 bytes)][encryptedData]
+            const result = new Uint8Array(4 + encryptedKey.byteLength + iv.length + encryptedData.byteLength);
+            const view = new DataView(result.buffer);
+            
+            view.setUint32(0, encryptedKey.byteLength, false);
+            result.set(new Uint8Array(encryptedKey), 4);
+            result.set(iv, 4 + encryptedKey.byteLength);
+            result.set(new Uint8Array(encryptedData), 4 + encryptedKey.byteLength + iv.length);
+            
+            // Convert to base64
+            let binary = '';
+            for (let i = 0; i < result.length; i++) {
+                binary += String.fromCharCode(result[i]);
+            }
+            return btoa(binary);
+        }
+
+        function toMonthYear(val) {
+            if (!val) return '';
+            if (/^\d{2}\/\d{4}$/.test(val)) return val;
+            if (/^\d{2}\/\d{2}$/.test(val)) {
+                const [month, year] = val.split('/');
+                return `${month}/20${year}`;
+            }
+            return val;
+        }
+
+        function buildItemData() {
+            const title = document.getElementById('itemTitle').value.trim();
+            
+            if (!title) throw new Error('Title is required');
+            
+            let fields = [];
+            
+            if (selectedCategory === 'Login') {
+                const username = document.getElementById('loginUsername').value.trim();
+                const password = document.getElementById('loginPassword').value;
+                const url = document.getElementById('loginUrl').value.trim();
+                const notes = document.getElementById('loginNotes').value.trim();
+                
+                if (!password) throw new Error('Password is required for Login items');
+                
+                if (username) fields.push({id: 'username', title: 'username', fieldType: 'Text', value: username});
+                fields.push({id: 'password', title: 'password', fieldType: 'Concealed', value: password});
+                if (url) fields.push({id: 'url', title: 'website', fieldType: 'Url', value: url});
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+                
+            } else if (selectedCategory === 'SecureNote') {
+                const content = document.getElementById('noteContent').value.trim();
+                if (!content) throw new Error('Note content is required');
+                
+            } else if (selectedCategory === 'CreditCard') {
+                const cardholderName = document.getElementById('cardholderName').value.trim();
+                const cardType = document.getElementById('cardType').value.trim();
+                const cardNumber = document.getElementById('cardNumber').value.replace(/\s/g, '');
+                const cvv = document.getElementById('cvv').value.trim();
+                const expiryDate = document.getElementById('expiryDate').value.trim();
+                const validFrom = document.getElementById('validFrom').value.trim();
+                const issuingBank = document.getElementById('issuingBank').value.trim();
+                const phoneLocal = document.getElementById('phoneLocal').value.trim();
+                const phoneTollFree = document.getElementById('phoneTollFree').value.trim();
+                const phoneIntl = document.getElementById('phoneIntl').value.trim();
+                const website = document.getElementById('website').value.trim();
+                const pin = document.getElementById('pin').value.trim();
+                const creditLimit = document.getElementById('creditLimit').value.trim();
+                const cashLimit = document.getElementById('cashLimit').value.trim();
+                const interestRate = document.getElementById('interestRate').value.trim();
+                const issueNumber = document.getElementById('issueNumber').value.trim();
+                const notes = document.getElementById('cardNotes').value.trim();
+                
+                if (!cardNumber) throw new Error('Card number is required');
+                
+                // Built-in fields
+                if (cardholderName) fields.push({id: 'cardholder', title: 'cardholder name', fieldType: 'Text', value: cardholderName});
+                if (cardType) fields.push({id: 'type', title: 'type', fieldType: 'CreditCardType', value: cardType});
+                fields.push({id: 'ccnum', title: 'number', fieldType: 'CreditCardNumber', value: cardNumber});
+                if (cvv) fields.push({id: 'cvv', title: 'verification number', fieldType: 'Concealed', value: cvv});
+                if (expiryDate) fields.push({id: 'expiry', title: 'expiry date', fieldType: 'MonthYear', value: toMonthYear(expiryDate)});
+                if (validFrom) fields.push({id: 'validFrom', title: 'valid from', fieldType: 'MonthYear', value: toMonthYear(validFrom)});
+                
+                // Contact Info section
+                if (issuingBank) fields.push({id: 'bank', title: 'issuing bank', fieldType: 'Text', value: issuingBank, sectionId: 'contactInfo'});
+                if (phoneLocal) fields.push({id: 'phoneLocal', title: 'phone (local)', fieldType: 'Phone', value: phoneLocal, sectionId: 'contactInfo'});
+                if (phoneTollFree) fields.push({id: 'phoneTollFree', title: 'phone (toll free)', fieldType: 'Phone', value: phoneTollFree, sectionId: 'contactInfo'});
+                if (phoneIntl) fields.push({id: 'phoneIntl', title: 'phone (intl)', fieldType: 'Phone', value: phoneIntl, sectionId: 'contactInfo'});
+                if (website) fields.push({id: 'website', title: 'website', fieldType: 'Url', value: website, sectionId: 'contactInfo'});
+                
+                // Details section
+                if (pin) fields.push({id: 'pin', title: 'PIN', fieldType: 'Concealed', value: pin, sectionId: 'details'});
+                if (creditLimit) fields.push({id: 'creditLimit', title: 'credit limit', fieldType: 'Text', value: creditLimit, sectionId: 'details'});
+                if (cashLimit) fields.push({id: 'cashLimit', title: 'cash withdrawal limit', fieldType: 'Text', value: cashLimit, sectionId: 'details'});
+                if (interestRate) fields.push({id: 'interest', title: 'interest rate', fieldType: 'Text', value: interestRate, sectionId: 'details'});
+                if (issueNumber) fields.push({id: 'issuenumber', title: 'issue number', fieldType: 'Text', value: issueNumber, sectionId: 'details'});
+                
+            } else if (selectedCategory === 'ApiCredentials') {
+                const username = document.getElementById('apiUsername').value.trim();
+                const credential = document.getElementById('apiCredential').value.trim();
+                const type = document.getElementById('apiType').value.trim();
+                const hostname = document.getElementById('apiHostname').value.trim();
+                const notes = document.getElementById('apiNotes').value.trim();
+                
+                if (!credential) throw new Error('API credential is required');
+                
+                if (username) fields.push({id: 'username', title: 'username', fieldType: 'Text', value: username});
+                fields.push({id: 'credential', title: 'credential', fieldType: 'Concealed', value: credential});
+                if (type) fields.push({id: 'type', title: 'type', fieldType: 'Menu', value: type});
+                if (hostname) fields.push({id: 'hostname', title: 'hostname', fieldType: 'Text', value: hostname});
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+                
+            } else if (selectedCategory === 'Database') {
+                const dbType = document.getElementById('databaseType').value.trim();
+                const hostname = document.getElementById('dbHostname').value.trim();
+                const port = document.getElementById('dbPort').value.trim();
+                const database = document.getElementById('dbDatabase').value.trim();
+                const username = document.getElementById('dbUsername').value.trim();
+                const password = document.getElementById('dbPassword').value.trim();
+                const sid = document.getElementById('dbSid').value.trim();
+                const alias = document.getElementById('dbAlias').value.trim();
+                const notes = document.getElementById('dbNotes').value.trim();
+                
+                if (!hostname) throw new Error('Server/hostname is required');
+                
+                if (dbType) fields.push({id: 'database_type', title: 'type', fieldType: 'Menu', value: dbType});
+                fields.push({id: 'hostname', title: 'server', fieldType: 'Text', value: hostname});
+                if (port) fields.push({id: 'port', title: 'port', fieldType: 'Text', value: port});
+                if (database) fields.push({id: 'database', title: 'database', fieldType: 'Text', value: database});
+                if (username) fields.push({id: 'username', title: 'username', fieldType: 'Text', value: username});
+                if (password) fields.push({id: 'password', title: 'password', fieldType: 'Concealed', value: password});
+                if (sid) fields.push({id: 'sid', title: 'SID', fieldType: 'Text', value: sid});
+                if (alias) fields.push({id: 'alias', title: 'alias', fieldType: 'Text', value: alias});
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+                
+            } else if (selectedCategory === 'Server') {
+                // Default fields (no section)
+                const url = document.getElementById('serverUrl').value.trim();
+                const username = document.getElementById('serverUsername').value.trim();
+                const password = document.getElementById('serverPassword').value.trim();
+                
+                // Admin Console section fields
+                const adminUrl = document.getElementById('serverAdminUrl').value.trim();
+                const adminUsername = document.getElementById('serverAdminUsername').value.trim();
+                const adminPassword = document.getElementById('serverAdminPassword').value.trim();
+                
+                // Hosting Provider section fields
+                const providerName = document.getElementById('serverProviderName').value.trim();
+                const providerWebsite = document.getElementById('serverProviderWebsite').value.trim();
+                const supportUrl = document.getElementById('serverSupportUrl').value.trim();
+                const supportPhone = document.getElementById('serverSupportPhone').value.trim();
+                
+                const notes = document.getElementById('serverNotes').value.trim();
+                
+                // Default fields (no sectionId)
+                if (url) fields.push({id: 'url', title: 'URL', fieldType: 'Url', value: url});
+                if (username) fields.push({id: 'username', title: 'username', fieldType: 'Text', value: username});
+                if (password) fields.push({id: 'password', title: 'password', fieldType: 'Concealed', value: password});
+                
+                // Admin Console fields
+                if (adminUrl) fields.push({id: 'admin_console_url', title: 'admin console URL', fieldType: 'Url', value: adminUrl, sectionId: 'admin_console'});
+                if (adminUsername) fields.push({id: 'admin_console_username', title: 'admin console username', fieldType: 'Text', value: adminUsername, sectionId: 'admin_console'});
+                if (adminPassword) fields.push({id: 'admin_console_password', title: 'console password', fieldType: 'Concealed', value: adminPassword, sectionId: 'admin_console'});
+                
+                // Hosting Provider fields
+                if (providerName) fields.push({id: 'name', title: 'name', fieldType: 'Text', value: providerName, sectionId: 'hosting_provider_details'});
+                if (providerWebsite) fields.push({id: 'website', title: 'website', fieldType: 'Url', value: providerWebsite, sectionId: 'hosting_provider_details'});
+                if (supportUrl) fields.push({id: 'support_contact_url', title: 'support URL', fieldType: 'Url', value: supportUrl, sectionId: 'hosting_provider_details'});
+                if (supportPhone) fields.push({id: 'support_contact_phone', title: 'support phone', fieldType: 'Phone', value: supportPhone, sectionId: 'hosting_provider_details'});
+                
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+                
+            } else if (selectedCategory === 'Router') {
+                const name = document.getElementById('routerName').value.trim();
+                const password = document.getElementById('routerPassword').value.trim();
+                const server = document.getElementById('routerServer').value.trim();
+                const notes = document.getElementById('routerNotes').value.trim();
+                
+                if (!password) throw new Error('Password is required');
+                
+                if (name) fields.push({id: 'name', title: 'base station name', fieldType: 'Text', value: name});
+                fields.push({id: 'password', title: 'base station password', fieldType: 'Concealed', value: password});
+                if (server) fields.push({id: 'server', title: 'server / ip address', fieldType: 'Text', value: server});
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+                
+            } else if (selectedCategory === 'SoftwareLicense') {
+                const version = document.getElementById('licenseVersion').value.trim();
+                const key = document.getElementById('licenseKey').value.trim();
+                const notes = document.getElementById('licenseNotes').value.trim();
+                
+                if (!key) throw new Error('License key is required');
+                
+                if (version) fields.push({id: 'product_version', title: 'version', fieldType: 'Text', value: version});
+                fields.push({id: 'reg_code', title: 'license key', fieldType: 'Text', value: key});
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+                
+            } else if (selectedCategory === 'Document') {
+                if (!documentFile) throw new Error('Document file is required');
+                const notes = document.getElementById('documentNotes').value.trim();
+                if (notes) fields.push({id: 'notesPlain', title: 'notes', fieldType: 'Text', value: notes});
+            }
+            
+            const itemData = {
+                title: title,
+                category: selectedCategory,
+                fields: fields,
+                tags: window.tags
+            };
+            
+            // For Secure Notes, add content as notes
+            if (selectedCategory === 'SecureNote') {
+                const content = document.getElementById('noteContent').value.trim();
+                itemData.notes = content;
+            }
+            
+            // For Credit Cards, add notes
+            if (selectedCategory === 'CreditCard') {
+                const notes = document.getElementById('cardNotes').value.trim();
+                if (notes) itemData.notes = notes;
+            }
+            
+            return itemData;
+        }
+
+        async function encryptDataWithFile(itemData) {
+            // Handle document file (for Document category)
+            if (selectedCategory === 'Document' && documentFile) {
+                const fileContent = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(documentFile);
+                });
+                itemData.attachment = {
+                    filename: documentFile.name,
+                    size: documentFile.size,
+                    type: documentFile.type,
+                    content: fileContent
+                };
+            }
+            // Handle regular attachment (for other categories)
+            else if (attachedFile) {
+                const fileContent = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(attachedFile);
+                });
+                itemData.attachment = {
+                    filename: attachedFile.name,
+                    size: attachedFile.size,
+                    type: attachedFile.type,
+                    content: fileContent
+                };
+            }
+            
+            return await encryptData(itemData);
+        }
+
+        document.getElementById('itemForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (!window.publicKey) {
+                alert('Encryption not ready. Please wait and try again.');
+                return;
+            }
+            
+            const status = document.getElementById('status');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            try {
+                submitBtn.disabled = true;
+                submitBtn.textContent = '🔒 Encrypting...';
+                status.textContent = 'Encrypting your data...';
+                status.className = 'status loading';
+                status.style.display = 'block';
+                
+                const itemData = buildItemData();
+                const encryptedPayload = await encryptDataWithFile(itemData);
+                
+                status.textContent = 'Sending encrypted data...';
+                submitBtn.textContent = '📤 Sending...';
+                
+                const response = await fetch(`${API_BASE}/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ encryptedPayload: encryptedPayload })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    status.textContent = `✓ Item created successfully! Your data was encrypted end-to-end.`;
+                    status.className = 'status success';
+                    
+                    setTimeout(() => {
+                        document.getElementById('itemForm').reset();
+                        window.tags = [];
+                        attachedFile = null;
+                        documentFile = null;
+                        renderTags();
+                        renderFiles();
+                        renderDocumentFile();
+                        status.style.display = 'none';
+                        selectCategory('Login'); // Reset to Login
+                    }, 3000);
+                } else {
+                    throw new Error(result.error || result.message || 'Failed to create item');
+                }
+            } catch (error) {
+                status.textContent = `❌ Error: ${error.message}`;
+                status.className = 'status error';
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.textContent = '🔒 Create Encrypted Item';
+            }
+        });
+
+        // Credit card formatting
+        document.getElementById('cardNumber').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\s/g, '');
+            let formattedValue = value.match(/.{1,4}/g)?.join(' ') || value;
+            e.target.value = formattedValue;
+        });
+
+        document.getElementById('expiryDate').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length >= 2) {
+                e.target.value = value.substring(0, 2) + '/' + value.substring(2, 4);
+            } else {
+                e.target.value = value;
+            }
+        });
+
+        document.getElementById('validFrom').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\D/g, '');
+            if (value.length >= 2) {
+                e.target.value = value.substring(0, 2) + '/' + value.substring(2, 4);
+            } else {
+                e.target.value = value;
+            }
+        });
+
+        // Tag input event listener
+        document.getElementById('tagInput').addEventListener('keydown', handleTagInput);
+    </script>
+</body>
+</html>
