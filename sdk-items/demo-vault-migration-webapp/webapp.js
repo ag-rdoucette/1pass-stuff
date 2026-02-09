@@ -3,7 +3,6 @@ import sdk from '@1password/sdk';
 import { execSync } from 'child_process';
 import express from 'express';
 import bodyParser from 'body-parser';
-import session from 'express-session';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import https from 'https';
@@ -156,12 +155,6 @@ app.set('view engine', 'ejs');
 app.use(express.static('public'));
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(session({
-  secret: 'your-secret-key',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: false, httpOnly: true, path: '/', maxAge: 24 * 60 * 60 * 1000 }
-}));
 
 // Global error handlers
 process.on('uncaughtException', (error) => {
