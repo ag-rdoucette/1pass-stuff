@@ -169,6 +169,51 @@ process.on('unhandledRejection', (reason, promise) => {
 
 // --- Utility functions ---
 
+// Sanitize an item for logging — redact concealed field values
+function sanitizeItemForLog(item) {
+  const sanitized = { ...item };
+  if (sanitized.fields) {
+    sanitized.fields = sanitized.fields.map(f => {
+      if (f.fieldType === sdk.ItemFieldType.Concealed) {
+        return { ...f, value: '***REDACTED***' };
+      }
+      return { ...f };
+    });
+  }
+  if (sanitized.document) {
+    sanitized.document = { name: sanitized.document.name, content: '[BINARY]' };
+  }
+  if (sanitized.files) {
+    sanitized.files = sanitized.files.map(f => ({ name: f.name, sectionId: f.sectionId, fieldId: f.fieldId, content: '[BINARY]' }));
+  }
+  return sanitized;
+}
+
+// Log full error object, not just .message
+function formatErrorForLog(error) {
+  if (typeof error === 'string') return error;
+  const parts = [`message: ${error.message}`];
+  if (error.code) parts.push(`code: ${error.code}`);
+  if (error.status) parts.push(`status: ${error.status}`);
+  if (error.statusCode) parts.push(`statusCode: ${error.statusCode}`);
+  if (error.details) parts.push(`details: ${JSON.stringify(error.details)}`);
+  if (error.cause) parts.push(`cause: ${error.cause}`);
+  // Catch any extra properties the SDK attaches
+  const extras = Object.keys(error).filter(k => !['message', 'stack', 'code', 'status', 'statusCode', 'details', 'cause'].includes(k));
+  if (extras.length > 0) {
+    const extraObj = {};
+    extras.forEach(k => { extraObj[k] = error[k]; });
+    parts.push(`extra: ${JSON.stringify(extraObj)}`);
+  }
+  return parts.join(' | ');
+}
+
+// Check if a category is Database (for enhanced debug logging)
+function isDatabaseCategory(category) {
+  const catStr = String(category).toLowerCase();
+  return catStr === 'database' || catStr === 'db';
+}
+
 // Retry function for handling conflicts or rate limits
 const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
@@ -824,6 +869,30 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
       const categoryStr = String(item.category);
       logger.info(vaultId, `Item "${item.title}" category: ${categoryStr}`);
 
+      // === DATABASE DEBUG: Log full source item details ===
+      if (isDatabaseCategory(item.category)) {
+        logger.info(vaultId, `[DATABASE DEBUG] Source item "${item.title}" [${item.id}] — raw category: "${item.category}", typeof: ${typeof item.category}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Source fields (${item.fields?.length || 0}): ${JSON.stringify(
+          (item.fields || []).map(f => ({
+            id: f.id,
+            title: f.title,
+            fieldType: f.fieldType,
+            sectionId: f.sectionId,
+            hasValue: !!(f.value),
+            valueLength: (f.value || '').length,
+            hasDetails: !!f.details,
+            detailsKeys: f.details ? Object.keys(f.details) : []
+          }))
+        )}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Source sections (${item.sections?.length || 0}): ${JSON.stringify(item.sections || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Source websites: ${JSON.stringify(item.websites || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Source tags: ${JSON.stringify(item.tags || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Source files: ${(item.files || []).map(f => f.name).join(', ') || 'none'}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Source notes present: ${!!(item.notes && item.notes.trim())}`);
+        // Check SDK category enum mapping
+        logger.info(vaultId, `[DATABASE DEBUG] sdk.ItemCategory.Database = "${sdk.ItemCategory.Database}", matches source: ${item.category === sdk.ItemCategory.Database}`);
+      }
+
       // Fetch document content for Document items
       if (item.category === 'Document' || item.category === sdk.ItemCategory.Document) {
         try {
@@ -879,6 +948,21 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
       // Build the new item
       const newItem = buildNewItem(item, newVaultId, vaultId);
 
+      // === DATABASE DEBUG: Log the fully built destination item ===
+      if (isDatabaseCategory(item.category)) {
+        const sanitized = sanitizeItemForLog(newItem);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest item "${newItem.title}" — dest category: "${newItem.category}", typeof: ${typeof newItem.category}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest fields (${newItem.fields?.length || 0}): ${JSON.stringify(sanitized.fields || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest sections (${newItem.sections?.length || 0}): ${JSON.stringify(newItem.sections || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest vaultId: ${newItem.vaultId}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest websites: ${JSON.stringify(newItem.websites || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest tags: ${JSON.stringify(newItem.tags || [])}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest notes present: ${!!(newItem.notes && newItem.notes.trim())}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest files: ${(sanitized.files || []).map(f => f.name).join(', ') || 'none'}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Built dest hasDocument: ${!!newItem.document}`);
+        logger.info(vaultId, `[DATABASE DEBUG] Full sanitized payload: ${JSON.stringify(sanitized)}`);
+      }
+
       // Attach document if present
       if (item.document) {
         newItem.document = item.document;
@@ -916,7 +1000,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
       const hasBinary = !!(item.document || (item.files && item.files.length > 0));
       const needsIndividualCreate = hasBinary || isCreditCard;
 
-      const entry = { sourceId: item.id, sourceTitle: item.title, newItem, refFields, hasBinary: needsIndividualCreate };
+      const entry = { sourceId: item.id, sourceTitle: item.title, sourceCategory: item.category, newItem, refFields, hasBinary: needsIndividualCreate };
 
       if (needsIndividualCreate) {
         individualItems.push(entry);
@@ -926,6 +1010,10 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
     } catch (error) {
       processedItems++;
       failureCount++;
+      // === DATABASE DEBUG: Enhanced error for Database items ===
+      if (isDatabaseCategory(item.category)) {
+        logger.error(vaultId, `[DATABASE DEBUG] Phase 1 build FAILED for "${item.title}" [${item.id}]: ${formatErrorForLog(error)}`);
+      }
       logger.logFailedItem(vaultId, vaultName, item.id, item.title, error);
       migrationResults.push({ id: item.id, title: item.title, success: false, error: error.message, progress: (processedItems / items.length) * 100 });
     }
@@ -944,6 +1032,13 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
     const chunk = batchableItems.slice(i, i + BATCH_SIZE);
     const itemsForBatch = chunk.map(entry => entry.newItem);
 
+    // === DATABASE DEBUG: Log Database items in this batch before sending ===
+    for (const entry of chunk) {
+      if (isDatabaseCategory(entry.sourceCategory)) {
+        logger.info(vaultId, `[DATABASE DEBUG] About to batch-create "${entry.sourceTitle}" [${entry.sourceId}] — category in payload: "${entry.newItem.category}"`);
+      }
+    }
+
     try {
       const batchResponse = await retryWithBackoff(() =>
         destSDK.client.items.createAll(newVaultId, itemsForBatch)
@@ -961,6 +1056,11 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
           migrationResults.push({ id: entry.sourceId, title: entry.sourceTitle, success: true, progress: (processedItems / items.length) * 100 });
           logger.info(vaultId, `Batch created item [${entry.sourceId}] "${entry.sourceTitle}" → ${res.content.id}`, { itemId: entry.sourceId });
 
+          // === DATABASE DEBUG: Log success ===
+          if (isDatabaseCategory(entry.sourceCategory)) {
+            logger.info(vaultId, `[DATABASE DEBUG] Successfully batch-created "${entry.sourceTitle}" [${entry.sourceId}] → ${res.content.id}`);
+          }
+
           // Track if it has reference fields to remap
           if (entry.refFields.length > 0) {
             itemsWithRefs.push({ sourceItemId: entry.sourceId, destItemId: res.content.id, refFields: entry.refFields });
@@ -968,12 +1068,29 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         } else if (res.error) {
           failureCount++;
           const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
+
+          // === DATABASE DEBUG: Enhanced batch error for Database items ===
+          if (isDatabaseCategory(entry.sourceCategory)) {
+            logger.error(vaultId, `[DATABASE DEBUG] Batch create FAILED for "${entry.sourceTitle}" [${entry.sourceId}]: ${formatErrorForLog(typeof res.error === 'object' ? res.error : { message: errMsg })}`);
+            logger.error(vaultId, `[DATABASE DEBUG] Raw batch error object: ${JSON.stringify(res.error)}`);
+            logger.error(vaultId, `[DATABASE DEBUG] Full payload that failed: ${JSON.stringify(sanitizeItemForLog(entry.newItem))}`);
+          }
+
           logger.logFailedItem(vaultId, vaultName, entry.sourceId, entry.sourceTitle, new Error(errMsg));
           migrationResults.push({ id: entry.sourceId, title: entry.sourceTitle, success: false, error: errMsg, progress: (processedItems / items.length) * 100 });
         }
       }
     } catch (error) {
       // If the entire batch fails, log each item as failed
+      // === DATABASE DEBUG: Log if any Database items were in the failed batch ===
+      const dbItemsInBatch = chunk.filter(e => isDatabaseCategory(e.sourceCategory));
+      if (dbItemsInBatch.length > 0) {
+        logger.error(vaultId, `[DATABASE DEBUG] Entire batch failed containing ${dbItemsInBatch.length} Database item(s): ${formatErrorForLog(error)}`);
+        for (const dbEntry of dbItemsInBatch) {
+          logger.error(vaultId, `[DATABASE DEBUG] Database item in failed batch: "${dbEntry.sourceTitle}" [${dbEntry.sourceId}] — payload: ${JSON.stringify(sanitizeItemForLog(dbEntry.newItem))}`);
+        }
+      }
+
       for (const entry of chunk) {
         processedItems++;
         failureCount++;
@@ -994,6 +1111,12 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
       return { itemsLength: items.length, migrationResults, sourceItemCount, destItemCount: null, successCount, failureCount };
     }
 
+    // === DATABASE DEBUG: Log before individual create ===
+    if (isDatabaseCategory(entry.sourceCategory)) {
+      logger.info(vaultId, `[DATABASE DEBUG] About to individually create "${entry.sourceTitle}" [${entry.sourceId}] — category in payload: "${entry.newItem.category}"`);
+      logger.info(vaultId, `[DATABASE DEBUG] Individual create payload: ${JSON.stringify(sanitizeItemForLog(entry.newItem))}`);
+    }
+
     try {
       const createdItem = await retryWithBackoff(() => destSDK.client.items.create(entry.newItem));
 
@@ -1003,12 +1126,24 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
       migrationResults.push({ id: entry.sourceId, title: entry.sourceTitle, success: true, progress: (processedItems / items.length) * 100 });
       logger.info(vaultId, `Created item [${entry.sourceId}] "${entry.sourceTitle}" → ${createdItem.id} (individual)`, { itemId: entry.sourceId });
 
+      // === DATABASE DEBUG: Log success ===
+      if (isDatabaseCategory(entry.sourceCategory)) {
+        logger.info(vaultId, `[DATABASE DEBUG] Successfully individually created "${entry.sourceTitle}" [${entry.sourceId}] → ${createdItem.id}`);
+      }
+
       if (entry.refFields.length > 0) {
         itemsWithRefs.push({ sourceItemId: entry.sourceId, destItemId: createdItem.id, refFields: entry.refFields });
       }
     } catch (error) {
       processedItems++;
       failureCount++;
+
+      // === DATABASE DEBUG: Enhanced individual create error ===
+      if (isDatabaseCategory(entry.sourceCategory)) {
+        logger.error(vaultId, `[DATABASE DEBUG] Individual create FAILED for "${entry.sourceTitle}" [${entry.sourceId}]: ${formatErrorForLog(error)}`);
+        logger.error(vaultId, `[DATABASE DEBUG] Full payload that failed: ${JSON.stringify(sanitizeItemForLog(entry.newItem))}`);
+      }
+
       logger.logFailedItem(vaultId, vaultName, entry.sourceId, entry.sourceTitle, error);
       migrationResults.push({ id: entry.sourceId, title: entry.sourceTitle, success: false, error: error.message, progress: (processedItems / items.length) * 100 });
     }
@@ -1376,6 +1511,13 @@ class OnePasswordSDK {
 
       if (itemIds.length === 0) return [];
 
+      // === DATABASE DEBUG: Log any Database items found in the overview list ===
+      for (const overview of itemOverviews) {
+        if (isDatabaseCategory(overview.category)) {
+          logger.info(vaultId, `[DATABASE DEBUG] Found Database item in overview list: "${overview.title}" [${overview.id}] category="${overview.category}"`);
+        }
+      }
+
       // Batch fetch full item details using getAll in chunks
       const BATCH_GET_SIZE = 50;
       const fullItems = [];
@@ -1388,12 +1530,38 @@ class OnePasswordSDK {
             this.client.items.getAll(vaultId, chunkIds)
           );
 
-          for (const res of batchResponse.individualResponses) {
+          for (let idx = 0; idx < batchResponse.individualResponses.length; idx++) {
+            const res = batchResponse.individualResponses[idx];
             if (res.content) {
+              // === DATABASE DEBUG: Log raw fetched item from getAll ===
+              if (isDatabaseCategory(res.content.category)) {
+                logger.info(vaultId, `[DATABASE DEBUG] getAll returned Database item "${res.content.title}" [${res.content.id}] — raw category: "${res.content.category}", fields: ${res.content.fields?.length || 0}, sections: ${res.content.sections?.length || 0}`);
+                logger.info(vaultId, `[DATABASE DEBUG] getAll raw fields: ${JSON.stringify(
+                  (res.content.fields || []).map(f => ({
+                    id: f.id,
+                    title: f.title,
+                    fieldType: f.fieldType,
+                    sectionId: f.sectionId,
+                    hasValue: !!(f.value),
+                    valueLength: (f.value || '').length,
+                    hasDetails: !!f.details,
+                    detailsKeys: f.details ? Object.keys(f.details) : []
+                  }))
+                )}`);
+                logger.info(vaultId, `[DATABASE DEBUG] getAll raw sections: ${JSON.stringify(res.content.sections || [])}`);
+              }
               fullItems.push(res.content);
             } else if (res.error) {
               const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
-              logger.error(vaultId, `Batch get failed for an item: ${errMsg}`);
+              // Try to correlate with the item ID from the chunk
+              const failedItemId = chunkIds[idx] || 'unknown';
+              logger.error(vaultId, `Batch get failed for item [${failedItemId}]: ${errMsg}`);
+              // === DATABASE DEBUG: Check if this could be a Database item ===
+              const matchingOverview = itemOverviews.find(o => o.id === failedItemId);
+              if (matchingOverview && isDatabaseCategory(matchingOverview.category)) {
+                logger.error(vaultId, `[DATABASE DEBUG] getAll FAILED for Database item "${matchingOverview.title}" [${failedItemId}]: ${formatErrorForLog(typeof res.error === 'object' ? res.error : { message: errMsg })}`);
+                logger.error(vaultId, `[DATABASE DEBUG] Raw getAll error object: ${JSON.stringify(res.error)}`);
+              }
             }
           }
         } catch (batchError) {
@@ -1402,9 +1570,32 @@ class OnePasswordSDK {
           for (const id of chunkIds) {
             try {
               const item = await retryWithBackoff(() => this.client.items.get(vaultId, id));
+
+              // === DATABASE DEBUG: Log individually fetched Database item ===
+              if (isDatabaseCategory(item.category)) {
+                logger.info(vaultId, `[DATABASE DEBUG] Individual get returned Database item "${item.title}" [${item.id}] — raw category: "${item.category}", fields: ${item.fields?.length || 0}, sections: ${item.sections?.length || 0}`);
+                logger.info(vaultId, `[DATABASE DEBUG] Individual get raw fields: ${JSON.stringify(
+                  (item.fields || []).map(f => ({
+                    id: f.id,
+                    title: f.title,
+                    fieldType: f.fieldType,
+                    sectionId: f.sectionId,
+                    hasValue: !!(f.value),
+                    valueLength: (f.value || '').length,
+                    hasDetails: !!f.details,
+                    detailsKeys: f.details ? Object.keys(f.details) : []
+                  }))
+                )}`);
+              }
+
               fullItems.push(item);
             } catch (itemError) {
-              logger.error(vaultId, `Failed to get item ${id}: ${itemError.message}`);
+              logger.error(vaultId, `Failed to get item ${id}: ${formatErrorForLog(itemError)}`);
+              // === DATABASE DEBUG: Check if this is a Database item ===
+              const matchingOverview = itemOverviews.find(o => o.id === id);
+              if (matchingOverview && isDatabaseCategory(matchingOverview.category)) {
+                logger.error(vaultId, `[DATABASE DEBUG] Individual get FAILED for Database item "${matchingOverview.title}" [${id}]: ${formatErrorForLog(itemError)}`);
+              }
             }
           }
         }
@@ -1468,6 +1659,20 @@ class OnePasswordSDK {
             });
           }
 
+          // === DATABASE DEBUG: Log processed item data ===
+          if (isDatabaseCategory(fullItem.category)) {
+            logger.info(vaultId, `[DATABASE DEBUG] Processed Database item "${itemData.title}" [${itemData.id}] — fields after normalization: ${JSON.stringify(
+              itemData.fields.map(f => ({
+                id: f.id,
+                title: f.title,
+                fieldType: f.fieldType,
+                sectionId: f.sectionId,
+                hasValue: !!(f.value),
+                valueLength: (f.value || '').length
+              }))
+            )}`);
+          }
+
           // Read attached files (must be done individually — binary content)
           if (fullItem.files && fullItem.files.length > 0) {
             const filePromises = fullItem.files.map(file =>
@@ -1501,6 +1706,10 @@ class OnePasswordSDK {
           items.push(itemData);
         } catch (processError) {
           logger.error(vaultId, `Failed to process item ${fullItem.id}: ${processError.message}`);
+          // === DATABASE DEBUG: Log processing failure ===
+          if (isDatabaseCategory(fullItem.category)) {
+            logger.error(vaultId, `[DATABASE DEBUG] Processing FAILED for Database item "${fullItem.title}" [${fullItem.id}]: ${formatErrorForLog(processError)}`);
+          }
         }
       }
 
