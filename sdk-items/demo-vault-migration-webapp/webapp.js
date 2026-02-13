@@ -654,7 +654,61 @@ function buildNewItem(item, newVaultId, vaultId) {
       }
     }
   }
-  // Standard fields (non-credit-card)
+  // Database fields — built-in fields must have sectionId: "" just like Credit Cards
+  else if (item.category === 'Database' || item.category === sdk.ItemCategory.Database) {
+    newItem.category = sdk.ItemCategory.Database;
+
+    const dbBuiltInFieldIds = new Set([
+      "database_type", "hostname", "port", "database",
+      "username", "password", "sid", "alias", "options"
+    ]);
+
+    if (item.fields && item.fields.length > 0) {
+      const builtInFields = [];
+      const sectionFields = [];
+
+      for (const field of item.fields) {
+        const mapped = buildMigratedField(field);
+        if (dbBuiltInFieldIds.has(field.id)) {
+          mapped.sectionId = "";
+          builtInFields.push(mapped);
+        } else {
+          if (!mapped.sectionId || mapped.sectionId === undefined) {
+            mapped.sectionId = "add more";
+          }
+          sectionFields.push(mapped);
+        }
+      }
+
+      newItem.fields = [...builtInFields, ...sectionFields];
+    }
+
+    // Root section must be first
+    newItem.sections = [{ id: "", title: "" }];
+    if (item.sections && item.sections.length > 0) {
+      for (const section of item.sections) {
+        if (section.id && section.id !== "" && section.id !== null) {
+          newItem.sections.push({
+            id: section.id,
+            title: section.title || section.label || ""
+          });
+        }
+      }
+    }
+
+    // Ensure every sectionId referenced by a field has a matching section
+    if (newItem.fields) {
+      for (const field of newItem.fields) {
+        const sid = field.sectionId;
+        if (sid && sid !== "" && sid !== null) {
+          if (!newItem.sections.some(s => s.id === sid)) {
+            newItem.sections.push({ id: sid, title: sid === "add more" ? "" : sid });
+          }
+        }
+      }
+    }
+  }
+  // Standard fields (non-credit-card, non-database)
   else if (item.fields && item.fields.length > 0) {
     newItem.fields = item.fields.map(buildMigratedField);
   }
@@ -663,8 +717,9 @@ function buildNewItem(item, newVaultId, vaultId) {
     newItem.notes = item.notes || "Migrated Secure Note";
   }
 
-  // Sections (skip for credit cards — already handled above)
-  if (!(item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard)) {
+  // Sections (skip for credit cards and databases — already handled above)
+  if (!(item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard ||
+        item.category === 'Database' || item.category === sdk.ItemCategory.Database)) {
     if (item.sections && item.sections.length > 0) {
       newItem.sections = item.sections.map(section => ({
         id: section.id,
