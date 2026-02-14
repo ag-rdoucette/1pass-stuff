@@ -208,6 +208,17 @@ function formatErrorForLog(error) {
   return parts.join(' | ');
 }
 
+// Sanitize a section ID to only contain characters allowed by the SDK:
+// alphanumeric, hyphen, underscore, period, and space.
+// Returns a mapping-friendly ID. The section TITLE preserves the original display name.
+function sanitizeSectionId(id) {
+  if (!id || id === "") return "";
+  // Strip any character that isn't alphanumeric, hyphen, underscore, period, or space
+  const sanitized = id.replace(/[^a-zA-Z0-9\-_. ]/g, '');
+  // If stripping left it empty, generate a safe fallback
+  return sanitized || ("section-" + id.length);
+}
+
 // Check if a category is Database (for enhanced debug logging)
 function isDatabaseCategory(category) {
   const catStr = String(category).toLowerCase();
@@ -667,6 +678,19 @@ function buildNewItem(item, newVaultId, vaultId) {
       const builtInFields = [];
       const sectionFields = [];
 
+      // Build a map of original section ID → sanitized section ID
+      const sectionIdRemap = {};
+      if (item.sections) {
+        for (const s of item.sections) {
+          if (s.id && s.id !== "") {
+            const sanitized = sanitizeSectionId(s.id);
+            if (sanitized !== s.id) {
+              sectionIdRemap[s.id] = sanitized;
+            }
+          }
+        }
+      }
+
       for (const field of item.fields) {
         const mapped = buildMigratedField(field);
         if (dbBuiltInFieldIds.has(field.id)) {
@@ -675,6 +699,9 @@ function buildNewItem(item, newVaultId, vaultId) {
         } else {
           if (!mapped.sectionId || mapped.sectionId === undefined) {
             mapped.sectionId = "add more";
+          } else if (sectionIdRemap[mapped.sectionId]) {
+            // Remap to sanitized section ID
+            mapped.sectionId = sectionIdRemap[mapped.sectionId];
           }
           sectionFields.push(mapped);
         }
@@ -683,29 +710,41 @@ function buildNewItem(item, newVaultId, vaultId) {
       newItem.fields = [...builtInFields, ...sectionFields];
     }
 
-    // Root section must be first
-    newItem.sections = [{ id: "", title: "" }];
-    if (item.sections && item.sections.length > 0) {
-      for (const section of item.sections) {
-        if (section.id && section.id !== "" && section.id !== null) {
-          newItem.sections.push({
-            id: section.id,
-            title: section.title || section.label || ""
-          });
+    // Build sections from what fields actually reference (drops orphaned/invalid sections)
+    const referencedSectionIds = new Set();
+    if (newItem.fields) {
+      for (const field of newItem.fields) {
+        if (field.sectionId && field.sectionId !== "" && field.sectionId !== null) {
+          referencedSectionIds.add(field.sectionId);
         }
       }
     }
 
-    // Ensure every sectionId referenced by a field has a matching section
-    if (newItem.fields) {
-      for (const field of newItem.fields) {
-        const sid = field.sectionId;
-        if (sid && sid !== "" && sid !== null) {
-          if (!newItem.sections.some(s => s.id === sid)) {
-            newItem.sections.push({ id: sid, title: sid === "add more" ? "" : sid });
+    // Build a reverse map: sanitized ID → original section (for preserving titles)
+    const sectionIdRemap = {};
+    const sourceSectionMap = {};
+    if (item.sections) {
+      for (const s of item.sections) {
+        if (s.id && s.id !== "") {
+          sourceSectionMap[s.id] = s;
+          const sanitized = sanitizeSectionId(s.id);
+          if (sanitized !== s.id) {
+            sourceSectionMap[sanitized] = s; // Map sanitized ID back to original section for title lookup
           }
         }
       }
+    }
+
+    // Root section must be first
+    newItem.sections = [{ id: "", title: "" }];
+
+    // Only add sections that are actually referenced by fields
+    for (const sid of referencedSectionIds) {
+      const sourceSection = sourceSectionMap[sid];
+      newItem.sections.push({
+        id: sid,
+        title: sourceSection ? (sourceSection.title || sourceSection.label || "") : (sid === "add more" ? "" : "")
+      });
     }
   }
   // Standard fields (non-credit-card, non-database)
