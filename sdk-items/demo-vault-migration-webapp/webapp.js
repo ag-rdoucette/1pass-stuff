@@ -1,6 +1,12 @@
 
 import sdk from '@1password/sdk';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
+import crypto from 'crypto';
+
+// Migration sessions — stores credentials in memory, keyed by short-lived session ID.
+// Prevents tokens from appearing in URLs or browser history.
+const migrationSessions = new Map();
+const SESSION_TTL = 5 * 60 * 1000; // 5 minutes
 import express from 'express';
 import bodyParser from 'body-parser';
 import path from 'path';
@@ -267,7 +273,7 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
 
-// Redact concealed field values for logging
+
 function sanitizeItemForLog(item) {
   return redactItemForLog(item);
 }
@@ -299,7 +305,7 @@ function sanitizeSectionId(id) {
 // Debug: MIGRATION_DEBUG=1, POST /migration/debug, or UI toggle
 let DEBUG_ENABLED = process.env.MIGRATION_DEBUG === '1' || process.env.MIGRATION_DEBUG === 'true';
 
-// Redact sensitive fields in debug output
+
 function redactFieldsForLog(fields) {
   if (!fields) return [];
   const sensitiveLabels = /private.?key|secret|password|passphrase|credential|token|api.?key|ssh.?key|card.?number|ccnum|cvv|security.?code/i;
@@ -351,7 +357,7 @@ function redactFieldsForLog(fields) {
   });
 }
 
-// Redact full item for debug output
+
 function redactItemForLog(item) {
   const safe = { ...item };
   if (safe.fields) {
@@ -526,7 +532,7 @@ function buildMigratedField(field) {
 // and a section with id="" must exist as the FIRST section. Fields should be ordered:
 // built-in fields first, then sectioned fields.
 function buildCreditCardFields(fields, vaultId = null) {
-  // Built-in credit card field IDs — these render at the top of the card
+
   // and MUST have sectionId: "" (empty string, not null/undefined)
   const builtInFieldIds = new Set([
     "cardholder", "type", "number", "ccnum", "cvv", "expiry", "validFrom"
@@ -540,8 +546,8 @@ function buildCreditCardFields(fields, vaultId = null) {
     "pin", "creditLimit", "cashLimit", "interest", "issuenumber"
   ]);
 
-  const builtInFields = [];   // Fields that go in the root "" section (top of card)
-  const sectionFields = [];   // Fields that go in named sections
+  const builtInFields = [];
+  const sectionFields = [];
 
   for (const field of fields) {
     const fieldId = field.id || "unnamed";
@@ -554,7 +560,7 @@ function buildCreditCardFields(fields, vaultId = null) {
 
     const titleLower = (field.title || '').toLowerCase();
 
-    // Handle "Unsupported" fieldType from the SDK
+  
     if (field.fieldType === 'Unsupported' || field.fieldType === sdk.ItemFieldType.Unsupported) {
       if (fieldId === 'expiry' || fieldId === 'validFrom') {
         newField.fieldType = sdk.ItemFieldType.MonthYear;
@@ -632,7 +638,7 @@ function buildCreditCardFields(fields, vaultId = null) {
     }
   }
 
-  // Built-in fields first (renders at top of card), then sectioned fields
+
   const result = [...builtInFields, ...sectionFields];
 
   return result;
@@ -675,7 +681,7 @@ function buildCustomAsLogin(item, vaultId) {
           title: field.title || field.label || "username",
           fieldType: sdk.ItemFieldType.Text,
           value: field.value || "",
-          // NO sectionId — root-level built-in
+        
         });
         continue;
       }
@@ -688,7 +694,7 @@ function buildCustomAsLogin(item, vaultId) {
           title: field.title || field.label || "password",
           fieldType: sdk.ItemFieldType.Concealed,
           value: field.value || "",
-          // NO sectionId — root-level built-in
+        
         });
         continue;
       }
@@ -703,14 +709,14 @@ function buildCustomAsLogin(item, vaultId) {
           title: field.title || field.label || "one-time password",
           fieldType: sdk.ItemFieldType.Totp,
           value: totpValue,
-          // NO sectionId — root-level built-in
+        
         });
         continue;
       }
 
-      // Everything else: preserve in its section with correct type
+
       const mapped = buildMigratedField(field);
-      // Ensure concealed fields stay concealed
+    
       if (fieldType === sdk.ItemFieldType.Concealed) {
         mapped.fieldType = sdk.ItemFieldType.Concealed;
       }
@@ -722,7 +728,7 @@ function buildCustomAsLogin(item, vaultId) {
       sectionFields.push(mapped);
     }
 
-    // Built-in fields first (username, password, OTP), then section fields in original order
+  
     newItem.fields = [...builtInFields, ...sectionFields];
   }
 
@@ -734,7 +740,7 @@ function buildCustomAsLogin(item, vaultId) {
     }));
   }
 
-  // Ensure the "additional" fallback section exists if we used it
+
   if (newItem.fields?.some(f => f.sectionId === "additional")) {
     if (!newItem.sections) newItem.sections = [];
     if (!newItem.sections.some(s => s.id === "additional")) {
@@ -774,9 +780,7 @@ function buildCustomAsLogin(item, vaultId) {
   }
 
 
-  if (item.tags && item.tags.length > 0) {
-    newItem.tags = item.tags;
-  }
+  newItem.tags = item.tags && item.tags.length > 0 ? [...item.tags, 'migrated'] : ['migrated'];
 
 
   if (item.websites && item.websites.length > 0) {
@@ -790,9 +794,9 @@ function buildCustomAsLogin(item, vaultId) {
   return newItem;
 }
 
-// Build a new item object for SDK creation from a source item
+
 function buildNewItem(item, newVaultId, vaultId) {
-  // Handle CUSTOM items -> convert to Login
+
   if (isCustomCategory(item.category)) {
     const newItem = buildCustomAsLogin(item, vaultId);
     newItem.vaultId = newVaultId;
@@ -815,7 +819,7 @@ function buildNewItem(item, newVaultId, vaultId) {
     newItem.category = sdk.ItemCategory.SshKey;
   }
 
-  // Credit card fields
+
   if (item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard) {
     newItem.category = sdk.ItemCategory.CreditCard;
     if (item.fields && item.fields.length > 0) {
@@ -830,7 +834,7 @@ function buildNewItem(item, newVaultId, vaultId) {
       { id: "", title: "" }
     ];
 
-    // Add named sections from source (skip the empty-string one since we added it)
+
     if (item.sections && item.sections.length > 0) {
       for (const section of item.sections) {
         if (section.id && section.id !== "" && section.id !== null) {
@@ -842,7 +846,7 @@ function buildNewItem(item, newVaultId, vaultId) {
       }
     }
 
-    // Ensure every sectionId referenced by a field has a matching section
+
     if (newItem.fields) {
       for (const field of newItem.fields) {
         const sid = field.sectionId;
@@ -867,7 +871,7 @@ function buildNewItem(item, newVaultId, vaultId) {
       const builtInFields = [];
       const sectionFields = [];
 
-      // Build a map of original section ID → sanitized section ID
+  
       const sectionIdRemap = {};
       if (item.sections) {
         for (const s of item.sections) {
@@ -889,7 +893,7 @@ function buildNewItem(item, newVaultId, vaultId) {
           if (!mapped.sectionId || mapped.sectionId === undefined) {
             mapped.sectionId = "add more";
           } else if (sectionIdRemap[mapped.sectionId]) {
-            // Remap to sanitized section ID
+      
             mapped.sectionId = sectionIdRemap[mapped.sectionId];
           }
           sectionFields.push(mapped);
@@ -899,7 +903,7 @@ function buildNewItem(item, newVaultId, vaultId) {
       newItem.fields = [...builtInFields, ...sectionFields];
     }
 
-    // Build sections from what fields actually reference (drops orphaned/invalid sections)
+
     const referencedSectionIds = new Set();
     if (newItem.fields) {
       for (const field of newItem.fields) {
@@ -909,7 +913,7 @@ function buildNewItem(item, newVaultId, vaultId) {
       }
     }
 
-    // Build a reverse map: sanitized ID → original section (for preserving titles)
+
     const sectionIdRemap = {};
     const sourceSectionMap = {};
     if (item.sections) {
@@ -927,7 +931,7 @@ function buildNewItem(item, newVaultId, vaultId) {
     // Root section must be first
     newItem.sections = [{ id: "", title: "" }];
 
-    // Only add sections that are actually referenced by fields
+
     for (const sid of referencedSectionIds) {
       const sourceSection = sourceSectionMap[sid];
       newItem.sections.push({
@@ -945,7 +949,7 @@ function buildNewItem(item, newVaultId, vaultId) {
     newItem.notes = item.notes || "Migrated Secure Note";
   }
 
-  // Sections (skip for credit cards and databases — already handled above)
+
   if (!(item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard ||
         item.category === 'Database' || item.category === sdk.ItemCategory.Database)) {
     if (item.sections && item.sections.length > 0) {
@@ -991,9 +995,7 @@ function buildNewItem(item, newVaultId, vaultId) {
   }
 
 
-  if (item.tags && item.tags.length > 0) {
-    newItem.tags = item.tags;
-  }
+  newItem.tags = item.tags && item.tags.length > 0 ? [...item.tags, 'migrated'] : ['migrated'];
 
 
   if (item.websites && item.websites.length > 0) {
@@ -1048,12 +1050,14 @@ app.post('/migration/env-reload', (req, res) => {
 });
 
 
+const VALID_AUTH_MODES_SERVER = ['service-account', 'desktop'];
+
 app.post('/migration/list-vaults', async (req, res) => {
   const { serviceToken, authMode, sourceAccountName, useEnvTokens } = req.body;
 
   let resolvedToken = serviceToken;
-  let resolvedAuthMode = authMode || 'service-account';
-  let resolvedAccountName = sourceAccountName;
+  let resolvedAuthMode = VALID_AUTH_MODES_SERVER.includes(authMode) ? authMode : 'service-account';
+  let resolvedAccountName = typeof sourceAccountName === 'string' ? sourceAccountName : '';
 
   if (useEnvTokens && envConfig.loaded) {
     resolvedAuthMode = envConfig.authMode || 'service-account';
@@ -1120,25 +1124,26 @@ app.post('/migration/cancel', (req, res) => {
   res.json({ success: true, message: 'Migration cancellation requested' });
 });
 
-// Rate limit estimation — called before migration starts
+
 app.post('/migration/rate-limit-check', (req, res) => {
   const { vaultItemCounts } = req.body;
   if (!vaultItemCounts || !Array.isArray(vaultItemCounts)) {
     return res.json({ success: false, error: 'vaultItemCounts array required' });
   }
-  const estimatedCalls = rateLimitTracker.estimateCalls(vaultItemCounts);
+  const sanitized = vaultItemCounts.map(n => typeof n === 'number' && isFinite(n) ? Math.max(0, Math.floor(n)) : 0);
+  const estimatedCalls = rateLimitTracker.estimateCalls(sanitized);
   const status = rateLimitTracker.getStatus(estimatedCalls);
   logger.info(null, `Rate limit check: estimated ${estimatedCalls} calls, ${status.used} used in last hour, ${status.remaining} remaining`);
   res.json({ success: true, ...status });
 });
 
-// Get item count for a vault — accepts an initialized SDK instance
-// skipArchived: true for fast listing (skips the second API call per vault)
+
+
 async function getVaultItemCount(vaultId, sdkInstanceOrToken, { skipArchived = false } = {}) {
   try {
     let sdkInstance;
     if (typeof sdkInstanceOrToken === 'string') {
-      // Backwards compat: if a token string is passed, create an instance
+
       sdkInstance = new OnePasswordSDK({ token: sdkInstanceOrToken });
       await sdkInstance.initializeClient();
     } else {
@@ -1176,7 +1181,7 @@ async function getVaultItemCount(vaultId, sdkInstanceOrToken, { skipArchived = f
 //   5. For items that had Reference fields, fetch the dest item, add the ref field
 //      with the remapped dest ID, and save via items.put
 
-const BATCH_SIZE = 100; // createAll batch size limit (1Password max is 100)
+const BATCH_SIZE = 100;
 
 // Rate limit: 1000 writes/hour. Batch createAll = 1 call (up to 100 items).
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; 
@@ -1259,7 +1264,7 @@ async function desktopReadAllVaults(sourceSDK, vaultsToRead, isCancelled, onProg
       const items = await sourceSDK.listVaultItems(vault.id);
       logger.info(vault.id, `[Desktop Phase 1] Read ${items.length} items from "${vault.name}"`);
 
-      // For documents: fetch binary content while we still have source connection
+
       for (const item of items) {
         if (item.category === 'Document' || item.category === sdk.ItemCategory.Document) {
           try {
@@ -1288,10 +1293,7 @@ async function desktopReadAllVaults(sourceSDK, vaultsToRead, isCancelled, onProg
             const expiryField = item.fields?.find(f => f.id === 'expiry');
             if (expiryField && (!expiryField.value || expiryField.fieldType === 'Unsupported')) {
               try {
-                const cliOutput = execSync(
-                  `op item get "${item.id}" --vault "${vault.id}" --format json`,
-                  { encoding: 'utf8' }
-                );
+                const cliOutput = execFileSync('op', ['item', 'get', item.id, '--vault', vault.id, '--format', 'json'], { encoding: 'utf8' });
                 const cliItem = JSON.parse(cliOutput);
                 const cliExpiryField = cliItem.fields?.find(f => f.id === 'expiry');
                 if (cliExpiryField && cliExpiryField.value) {
@@ -1341,7 +1343,7 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
         newVaultId = privateVault.id;
         logger.info(vaultId, `[Desktop Phase 2] Found destination Private vault: "${privateVault.name}" [${newVaultId}]`);
       } else {
-        // Fallback: look by name
+    
         const byName = destVaults.find(v => {
           const n = (v.name || '').toLowerCase();
           return n === 'private' || n === 'employee' || n.includes('employee vault');
@@ -1361,13 +1363,9 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
   
     const destVaultName = `${vaultName} (Migrated)`;
     try {
-      let createVaultCommand;
-      if (destAccountName) {
-        createVaultCommand = `op vault create "${destVaultName}" --account "${destAccountName}" --format json`;
-      } else {
-        createVaultCommand = `op vault create "${destVaultName}" --format json`;
-      }
-      const newVaultOutput = execSync(createVaultCommand, { env: { ...process.env }, encoding: 'utf8' });
+      const args = ['vault', 'create', destVaultName, '--format', 'json'];
+      if (destAccountName) args.push('--account', destAccountName);
+      const newVaultOutput = execFileSync('op', args, { env: { ...process.env }, encoding: 'utf8' });
       const newVault = JSON.parse(newVaultOutput);
       newVaultId = newVault.id;
       rateLimitTracker.record();
@@ -1403,7 +1401,7 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
         newItem.document = item.document;
       }
 
-      // Handle reference fields — same logic as migrateVault
+
       const refFields = [];
       if (newItem.fields) {
         const fieldsWithoutRefs = [];
@@ -1507,7 +1505,7 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
     if (onProgress) onProgress(processedItems, items.length, successCount, failureCount);
   }
 
-  // Reference remapping
+
   if (itemsWithRefs.length > 0) {
     logger.info(vaultId, `[Desktop Phase 2] Adding reference fields to ${itemsWithRefs.length} items`);
     for (const ref of itemsWithRefs) {
@@ -1562,24 +1560,16 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
 
   let newVaultId;
   try {
-    let createVaultCommand;
     const cliEnv = { ...process.env };
+    const args = ['vault', 'create', destVaultName, '--format', 'json'];
 
     if (authMode === 'desktop') {
-      // Desktop auth — CLI uses the desktop app integration (no token needed)
-      // The user must have the 1Password desktop app running
-      if (destAccountName) {
-        createVaultCommand = `op vault create "${destVaultName}" --account "${destAccountName}" --format json`;
-      } else {
-        createVaultCommand = `op vault create "${destVaultName}" --format json`;
-      }
+      if (destAccountName) args.push('--account', destAccountName);
     } else {
-      // Service account — pass token via environment
       cliEnv.OP_SERVICE_ACCOUNT_TOKEN = destToken;
-      createVaultCommand = `op vault create "${destVaultName}" --format json`;
     }
 
-    const newVaultOutput = execSync(createVaultCommand, { env: cliEnv, encoding: 'utf8' });
+    const newVaultOutput = execFileSync('op', args, { env: cliEnv, encoding: 'utf8' });
     const newVault = JSON.parse(newVaultOutput);
     newVaultId = newVault.id;
     rateLimitTracker.record();
@@ -1609,13 +1599,13 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
   let successCount = 0;
   let failureCount = 0;
 
-  // sourceId → destId map for reference remapping
+
   const idMap = new Map();
   // Track which built items have reference fields that need remapping
   // Each entry: { sourceItemId, destItemId (filled after create), refFields: [{fieldId, sourceRefId}] }
   const itemsWithRefs = [];
 
-  // --- Phase 1: Build all new item objects ---
+
   logger.info(vaultId, `Phase 1: Building item objects...`);
 
   const batchableItems = [];
@@ -1653,7 +1643,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         }
       }
 
-      // For credit cards, fetch full item to get all fields
+
       if (item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard) {
         try {
           const fullItem = await retryWithBackoff(() => sourceSDK.client.items.get(vaultId, item.id));
@@ -1665,10 +1655,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
           if (expiryField && (!expiryField.value || expiryField.fieldType === 'Unsupported')) {
             try {
               const sourceEnv = { ...process.env, OP_SERVICE_ACCOUNT_TOKEN: sourceToken };
-              const cliOutput = execSync(
-                `op item get "${item.id}" --vault "${vaultId}" --format json`,
-                { env: sourceEnv, encoding: 'utf8' }
-              );
+              const cliOutput = execFileSync('op', ['item', 'get', item.id, '--vault', vaultId, '--format', 'json'], { env: sourceEnv, encoding: 'utf8' });
               const cliItem = JSON.parse(cliOutput);
               const cliExpiryField = cliItem.fields?.find(f => f.id === 'expiry');
               if (cliExpiryField && cliExpiryField.value) {
@@ -1723,7 +1710,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
             });
             // Don't include this field in the item — skip it
           } else {
-            // Clean up internal tags before sending to SDK
+      
             delete field._isReference;
             delete field._sourceRefId;
             fieldsWithoutRefs.push(field);
@@ -1758,7 +1745,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
     }
   }
 
-  // --- Phase 2: Create items ---
+
   logger.info(vaultId, `Phase 2: Creating items (${batchableItems.length} batchable, ${individualItems.length} individual)...`);
   for (let i = 0; i < batchableItems.length; i += BATCH_SIZE) {
     if (isCancelled()) {
@@ -1977,12 +1964,54 @@ function createSDKInstance(authMode, token, accountName) {
   }
   return new OnePasswordSDK({ token });
 }
+// POST: Start migration — stores credentials in a session, returns session ID
+app.post('/migration/start', (req, res) => {
+  const { sourceToken, destToken, authMode, sourceAccountName, destAccountName, useEnv, vaults } = req.body;
+
+  const validatedMode = VALID_AUTH_MODES_SERVER.includes(authMode) ? authMode : 'service-account';
+  const validatedVaults = Array.isArray(vaults) ? vaults.filter(v =>
+    v && typeof v.vaultId === 'string' && typeof v.vaultName === 'string'
+  ) : null;
+
+  const sessionId = crypto.randomUUID();
+  migrationSessions.set(sessionId, {
+    sourceToken: typeof sourceToken === 'string' ? sourceToken : null,
+    destToken: typeof destToken === 'string' ? destToken : null,
+    authMode: validatedMode,
+    sourceAccountName: typeof sourceAccountName === 'string' ? sourceAccountName : '',
+    destAccountName: typeof destAccountName === 'string' ? destAccountName : '',
+    useEnv: useEnv === true || useEnv === 'true' ? 'true' : null,
+    vaults: validatedVaults,
+    createdAt: Date.now()
+  });
+
+  // Auto-expire session
+  setTimeout(() => migrationSessions.delete(sessionId), SESSION_TTL);
+
+  res.json({ success: true, sessionId });
+});
+
+// GET: SSE migration stream — only accepts session ID, no tokens in URL
 app.get('/migration/migrate-all-vaults', async (req, res) => {
-  const { sourceToken, destToken, vaults, authMode, sourceAccountName, destAccountName, useEnv } = req.query;
+  const { sessionId } = req.query;
+  const session = sessionId ? migrationSessions.get(sessionId) : null;
+
+  if (!session) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.flushHeaders();
+    res.write(`data: ${JSON.stringify({ success: false, message: 'Invalid or expired migration session', finished: true })}\n\n`);
+    res.end();
+    return;
+  }
+
+  // Consume session — single use
+  migrationSessions.delete(sessionId);
+
+  const { sourceToken, destToken, authMode, sourceAccountName, destAccountName, useEnv, vaults } = session;
   let selectedVaults;
 
   try {
-    selectedVaults = vaults ? JSON.parse(decodeURIComponent(vaults)) : null;
+    selectedVaults = vaults ? (typeof vaults === 'string' ? JSON.parse(vaults) : vaults) : null;
   } catch (error) {
     selectedVaults = null;
   }
@@ -1995,7 +2024,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
     resolvedSourceAccount = envConfig.sourceAccount;
     resolvedDestAccount = envConfig.destAccount;
   } else {
-    mode = authMode || 'service-account';
+    mode = VALID_AUTH_MODES_SERVER.includes(authMode) ? authMode : 'service-account';
     resolvedSourceToken = sourceToken;
     resolvedDestToken = destToken;
     resolvedSourceAccount = sourceAccountName;
@@ -2013,7 +2042,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Origin', req.headers.origin || 'https://localhost:3001');
   res.flushHeaders();
 
   const keepAliveInterval = setInterval(() => {
@@ -2036,7 +2065,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
     // DESKTOP AUTH
     
     if (mode === 'desktop') {
-      // Phase 1: Read from source
+
       sseWrite(`data: ${JSON.stringify({
         progress: 0,
         outcome: { phase: 'desktop-source-connect', message: `Connecting to source account "${resolvedSourceAccount}"...` }
@@ -2076,7 +2105,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
         return;
       }
 
-      // Phase 2: Write to destination
+
       sseWrite(`data: ${JSON.stringify({
         progress: 0,
         outcome: { phase: 'desktop-dest-connect', message: `Connecting to destination account "${resolvedDestAccount}"...` }
@@ -2361,9 +2390,9 @@ app.post('/migration/debug', (req, res) => {
 class OnePasswordSDK {
   /**
    * @param {object} options
-   * @param {string} [options.token] - Service account token (for service-account mode)
-   * @param {string} [options.authMode] - 'service-account' or 'desktop'
-   * @param {string} [options.accountName] - Account name for desktop auth (e.g. "My Team")
+   * @param {string} [options.token]
+   * @param {string} [options.authMode]
+   * @param {string} [options.accountName]
    */
   constructor({ token, authMode = 'service-account', accountName } = {}) {
     this.token = token || null;
@@ -2373,7 +2402,7 @@ class OnePasswordSDK {
   }
 
   async initializeClient() {
-    if (this.client) return; // Reuse existing client
+    if (this.client) return;
 
     try {
       logger.info(null, `Initializing 1Password SDK client (mode: ${this.authMode})`);

@@ -388,8 +388,8 @@
     let completedVaults = 0;
     let totalItemsToMigrate = 0;
     let processedItems = 0;
-    let completedItemsFromPriorVaults = 0; // running total of items from fully completed vaults
-    let migratedVaultIds = new Set(); // track vaults successfully migrated this session
+    let completedItemsFromPriorVaults = 0;
+    let migratedVaultIds = new Set();
 
     // Warn before page refresh/close during active migration
     window.addEventListener('beforeunload', (e) => {
@@ -495,7 +495,7 @@
         connectBtnText.textContent = 'Connect Accounts';
         connectBtn.disabled = false;
         connectSpinner.style.display = 'none';
-        errorDiv.innerHTML = `<div class="alert alert-error"><span>⚠️</span><span>Failed to connect with .env: ${error.message}</span></div>`;
+        const errEl = document.createElement('div'); errEl.className = 'alert alert-error'; errEl.textContent = '⚠️ Failed to connect with .env: ' + error.message; errorDiv.innerHTML = ''; errorDiv.appendChild(errEl);
       }
     }
     
@@ -600,7 +600,7 @@
           throw new Error(result.error || 'Failed to connect');
         }
       } catch (error) {
-        errorDiv.innerHTML = `<div class="alert alert-error"><span>⚠️</span><span>Failed to connect: ${error.message}</span></div>`;
+        const errEl2 = document.createElement('div'); errEl2.className = 'alert alert-error'; errEl2.textContent = '⚠️ Failed to connect: ' + error.message; errorDiv.innerHTML = ''; errorDiv.appendChild(errEl2);
         if (subtitle) subtitle.textContent = 'Connection failed — check credentials and try again';
       } finally {
         connectBtn.disabled = false;
@@ -865,18 +865,44 @@
       let failureCount = 0;
       let totalItems = 0;
 
-      
-      let url = `/migration/migrate-all-vaults?authMode=${encodeURIComponent(authMode)}&vaults=${encodeURIComponent(JSON.stringify(selectedVaults))}`;
+      // POST credentials to get a session ID — tokens never appear in URLs
+      const startPayload = {
+        authMode,
+        vaults: selectedVaults
+      };
       if (useEnv) {
-        // .env provides all credentials (tokens or account names) — server reads from envConfig
-        url += `&useEnv=true`;
+        startPayload.useEnv = true;
       } else if (authMode === 'desktop') {
-        url += `&sourceAccountName=${encodeURIComponent(sourceAccountName)}&destAccountName=${encodeURIComponent(destAccountName)}`;
+        startPayload.sourceAccountName = sourceAccountName;
+        startPayload.destAccountName = destAccountName;
       } else {
-        url += `&sourceToken=${encodeURIComponent(sourceToken)}&destToken=${encodeURIComponent(destToken)}`;
+        startPayload.sourceToken = sourceToken;
+        startPayload.destToken = destToken;
       }
 
-      const eventSource = new EventSource(url);
+      let sessionId;
+      try {
+        const startRes = await fetch('/migration/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(startPayload)
+        });
+        const startData = await startRes.json();
+        if (!startData.success) {
+          showAlert('error', '✗ Failed to start migration session');
+          document.getElementById('migrateSelectedBtn').disabled = false;
+          isMigrating = false;
+          return;
+        }
+        sessionId = startData.sessionId;
+      } catch (e) {
+        showAlert('error', '✗ Failed to start migration: ' + e.message);
+        document.getElementById('migrateSelectedBtn').disabled = false;
+        isMigrating = false;
+        return;
+      }
+
+      const eventSource = new EventSource(`/migration/migrate-all-vaults?sessionId=${sessionId}`);
       
       eventSource.onopen = () => {
         document.getElementById('progressLabel').textContent = `Migrating ${totalVaultsToMigrate} vaults with ${totalItemsToMigrate} items...`;
@@ -996,13 +1022,18 @@
     
     function showAlert(type, message, duration = null) {
       const container = document.getElementById('alertContainer');
-      const alert = document.createElement('div');
-      alert.className = `alert alert-${type}`;
+      const alertDiv = document.createElement('div');
+      alertDiv.className = `alert alert-${type}`;
       const icon = type === 'success' ? '✓' : type === 'error' ? '✗' : type === 'warning' ? '⚠️' : 'ℹ️';
-      alert.innerHTML = `<span>${icon}</span><span>${message}</span>`;
-      container.appendChild(alert);
+      const iconSpan = document.createElement('span');
+      iconSpan.textContent = icon;
+      const msgSpan = document.createElement('span');
+      msgSpan.textContent = message;
+      alertDiv.appendChild(iconSpan);
+      alertDiv.appendChild(msgSpan);
+      container.appendChild(alertDiv);
       const timeout = duration || (type === 'info' ? 10000 : 5000);
-      setTimeout(() => { alert.style.opacity = '0'; setTimeout(() => alert.remove(), 300); }, timeout);
+      setTimeout(() => { alertDiv.style.opacity = '0'; setTimeout(() => alertDiv.remove(), 300); }, timeout);
     }
     
     function escapeHtml(text) { const div = document.createElement('div'); div.textContent = text; return div.innerHTML; }
