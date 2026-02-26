@@ -320,6 +320,7 @@
       <div class="search-box" style="display: flex; align-items: center; gap: 1rem;">
         <input type="text" id="vaultSearch" placeholder="Search vaults by name or ID..." oninput="filterVaults()" style="flex: 1;">
         <span id="vaultSelectionCount" style="font-size: 0.85rem; color: var(--text-secondary); white-space: nowrap;"></span>
+        <input type="text" id="globalSuffix" placeholder="Suffix for all vaults (optional)" style="padding: var(--space-md); background: var(--bg-tertiary); border: 1px solid var(--border-subtle); border-radius: 8px; color: var(--text-primary); font-size: 0.9rem; width: 260px;">
         <div class="debug-toggle" id="debugToggle" onclick="toggleDebug()" title="Enable verbose debug logging for all items in migration logs" style="flex-shrink: 0;">
           <label class="debug-switch">
             <input type="checkbox" id="debugCheckbox" onclick="event.stopPropagation()">
@@ -356,6 +357,7 @@
               <th>Vault ID</th>
               <th>Type</th>
               <th>Items</th>
+              <th>Suffix</th>
               <th>Status</th>
             </tr>
           </thead>
@@ -676,6 +678,13 @@
               : '<span class="status-badge" style="background: rgba(107, 177, 135, 0.15); color: var(--accent-success);">Shared</span>'
             }</td>
             <td class="item-count">${vault.itemCount}</td>
+            <td>
+              <input type="text" placeholder="optional"
+                style="width:120px; padding:4px 8px; background:var(--bg-tertiary); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-size:0.8rem;"
+                value="${escapeHtml(vault.suffix || '')}"
+                onchange="vaults.find(v=>v.id==='${vault.id}').suffix = this.value.trim()"
+                ${isMigrating || personalDisabled ? 'disabled' : ''}>
+            </td>
             <td>${currentStatusHtml}</td>
           </tr>
         `;
@@ -851,7 +860,8 @@
       totalItemsToMigrate = 0;
       vaults.forEach(v => { if (selectedVaultIds.has(v.id)) totalItemsToMigrate += v.itemCount; });
       
-      const selectedVaults = vaults.filter(v => selectedVaultIds.has(v.id)).map(v => ({ vaultId: v.id, vaultName: v.name, vaultType: v.vaultType || 'shared' }));
+      const globalSuffix = document.getElementById('globalSuffix').value.trim();
+      const selectedVaults = vaults.filter(v => selectedVaultIds.has(v.id)).map(v => ({ vaultId: v.id, vaultName: v.name, vaultType: v.vaultType || 'shared', suffix: v.suffix || globalSuffix }));
       
       const progressContainer = document.getElementById('progressContainer');
       progressContainer.classList.add('active');

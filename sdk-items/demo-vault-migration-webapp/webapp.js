@@ -1,4 +1,3 @@
-
 import sdk from '@1password/sdk';
 import { execFileSync } from 'child_process';
 import crypto from 'crypto';
@@ -34,7 +33,6 @@ function loadEnvFile() {
   console.log(`[startup] Looking for .env at: ${envPath}`);
 
   try {
-    // Direct read (not existsSync) — required to trigger 1Password's FUSE auth prompt
     const content = fs.readFileSync(envPath, 'utf8');
     console.log(`[startup] .env file read successfully (${content.length} bytes)`);
 
@@ -64,13 +62,11 @@ function loadEnvFile() {
     envConfig.sourceAccount = vars.SOURCE_ACCOUNT || null;
     envConfig.destAccount = vars.DEST_ACCOUNT || null;
 
-    // Only allow known auth modes — reject tokens accidentally pasted in AUTH_MODE
     const VALID_AUTH_MODES = ['service-account', 'desktop'];
     if (envConfig.authMode && !VALID_AUTH_MODES.includes(envConfig.authMode)) {
       console.log(`[startup] Auth mode: invalid value (not 'service-account' or 'desktop') — falling back to auto-detect`);
       envConfig.authMode = null;
     }
-
 
     if (!envConfig.authMode) {
       if (envConfig.sourceToken || envConfig.destToken) {
@@ -295,14 +291,12 @@ function formatErrorForLog(error) {
   return parts.join(' | ');
 }
 
-// SDK section IDs: only alphanumeric, hyphen, underscore, period, space
 function sanitizeSectionId(id) {
   if (!id || id === "") return "";
   const sanitized = id.replace(/[^a-zA-Z0-9\-_. ]/g, '');
   return sanitized || ("section-" + id.length);
 }
 
-// Debug: MIGRATION_DEBUG=1, POST /migration/debug, or UI toggle
 let DEBUG_ENABLED = process.env.MIGRATION_DEBUG === '1' || process.env.MIGRATION_DEBUG === 'true';
 
 
@@ -421,12 +415,10 @@ const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
             return result;
           } catch (retryErr) {
             if (isAppLockedError(retryErr)) {
-              
               if ((Date.now() - start) % 30000 < pollInterval) {
                 logger.info(null, `Still waiting for 1Password unlock... (${Math.round((Date.now() - start) / 1000)}s elapsed)`);
               }
             } else {
-              
               throw retryErr;
             }
           }
@@ -441,7 +433,6 @@ const retryWithBackoff = async (fn, maxRetries = 3, baseDelay = 1000) => {
       const isDataConflict = error.message.includes('data conflict');
 
       if ((isRateLimit || isDataConflict) && attempt < maxRetries) {
-        
         const delay = isRateLimit
           ? 30000 * Math.pow(2, attempt - 1)
           : baseDelay * Math.pow(2, attempt - 1);
@@ -500,11 +491,9 @@ function buildMigratedField(field) {
     };
     newField.value = "";
   }
-  
   else if (field.fieldType === sdk.ItemFieldType.SshKey && field.details?.content) {
     newField.value = field.details.content.privateKey || field.value || "";
   }
-  
   else if (field.fieldType === sdk.ItemFieldType.Totp) {
     const totpValue = field.value || field.details?.content?.totp || "";
     const isValidTotpUri = totpValue.startsWith("otpauth://totp/");
@@ -516,30 +505,22 @@ function buildMigratedField(field) {
       newField.value = totpValue;
     }
   }
-  
-  
   else if (field.fieldType === sdk.ItemFieldType.Reference) {
     newField.fieldType = sdk.ItemFieldType.Reference;
     newField.value = field.value || "";
-    
     newField._isReference = true;
     newField._sourceRefId = field.value || "";
   }
 
   return newField;
 }
-// Key insight from working Python Lambda: built-in CC fields MUST have section_id=""
-// and a section with id="" must exist as the FIRST section. Fields should be ordered:
-// built-in fields first, then sectioned fields.
+
 function buildCreditCardFields(fields, vaultId = null) {
 
-  // and MUST have sectionId: "" (empty string, not null/undefined)
   const builtInFieldIds = new Set([
     "cardholder", "type", "number", "ccnum", "cvv", "expiry", "validFrom"
   ]);
 
-  // All known standard CC field IDs (built-in + sectioned) — these should
-  // never be reassigned to "add more"
   const knownFieldIds = new Set([
     "cardholder", "type", "number", "ccnum", "cvv", "expiry", "validFrom",
     "bank", "phoneLocal", "phoneTollFree", "phoneIntl", "website",
@@ -560,7 +541,6 @@ function buildCreditCardFields(fields, vaultId = null) {
 
     const titleLower = (field.title || '').toLowerCase();
 
-  
     if (field.fieldType === 'Unsupported' || field.fieldType === sdk.ItemFieldType.Unsupported) {
       if (fieldId === 'expiry' || fieldId === 'validFrom') {
         newField.fieldType = sdk.ItemFieldType.MonthYear;
@@ -568,7 +548,6 @@ function buildCreditCardFields(fields, vaultId = null) {
         newField.fieldType = sdk.ItemFieldType.Text;
       }
     }
-
 
     if (fieldId === "type" || titleLower === "type") {
       newField.fieldType = sdk.ItemFieldType.CreditCardType;
@@ -604,7 +583,6 @@ function buildCreditCardFields(fields, vaultId = null) {
       }
     }
 
-    // Credit card number — match ONLY the actual card number fields
     if (fieldId === "number" || fieldId === "ccnum") {
       newField.fieldType = sdk.ItemFieldType.CreditCardNumber;
     }
@@ -617,46 +595,34 @@ function buildCreditCardFields(fields, vaultId = null) {
       newField.fieldType = sdk.ItemFieldType.Concealed;
     }
 
-
     if (builtInFieldIds.has(fieldId)) {
-      // Built-in fields ALWAYS get sectionId: "" — this is critical for rendering
       newField.sectionId = "";
       builtInFields.push(newField);
     } else {
-      // Sectioned fields keep their original sectionId from the source
       const sourceSectionId = field.sectionId;
       if (sourceSectionId && sourceSectionId !== "" && sourceSectionId !== null) {
         newField.sectionId = sourceSectionId;
       } else if (knownFieldIds.has(fieldId)) {
-        // Known field with no section — assign to "" (root)
         newField.sectionId = "";
       } else {
-        // Truly custom/unknown field with no section
         newField.sectionId = "add more";
       }
       sectionFields.push(newField);
     }
   }
 
-
   const result = [...builtInFields, ...sectionFields];
 
   return result;
 }
 
-// Convert a CUSTOM item to a Login item, preserving concealed fields and structure.
-// Login items in 1Password have a specific layout:
-//   - username, password, OTP are "built-in" root fields (NO sectionId) → render at top
-//   - all other fields live inside named sections
-// We detect built-in fields by label/id/type and strip their sectionId so they
-// render correctly, then keep everything else in its original section.
 function buildCustomAsLogin(item, vaultId) {
   logger.info(vaultId, `Converting CUSTOM item "${item.title}" to Login category (preserving concealed fields)`);
 
   const newItem = {
     title: item.title,
     category: sdk.ItemCategory.Login,
-    vaultId: null, // will be set by caller
+    vaultId: null,
   };
 
   if (item.notes && item.notes.trim() !== "") {
@@ -673,7 +639,6 @@ function buildCustomAsLogin(item, vaultId) {
       const fieldType = field.fieldType;
       const fieldId = (field.id || '').toLowerCase();
 
-  
       if (fieldId === 'username' || label === 'username' || label === 'user' ||
           label === 'email address' || label === 'login') {
         builtInFields.push({
@@ -681,12 +646,10 @@ function buildCustomAsLogin(item, vaultId) {
           title: field.title || field.label || "username",
           fieldType: sdk.ItemFieldType.Text,
           value: field.value || "",
-        
         });
         continue;
       }
 
-  
       if (fieldId === 'password' || label === 'password' || label === 'pass' ||
           (fieldType === sdk.ItemFieldType.Concealed && label.includes('password'))) {
         builtInFields.push({
@@ -694,12 +657,10 @@ function buildCustomAsLogin(item, vaultId) {
           title: field.title || field.label || "password",
           fieldType: sdk.ItemFieldType.Concealed,
           value: field.value || "",
-        
         });
         continue;
       }
 
-  
       if (fieldType === sdk.ItemFieldType.Totp || label === 'otp' ||
           label === 'one-time password' || label === 'totp' ||
           fieldId === 'totp' || fieldId === 'otp') {
@@ -709,29 +670,22 @@ function buildCustomAsLogin(item, vaultId) {
           title: field.title || field.label || "one-time password",
           fieldType: sdk.ItemFieldType.Totp,
           value: totpValue,
-        
         });
         continue;
       }
 
-
       const mapped = buildMigratedField(field);
-    
       if (fieldType === sdk.ItemFieldType.Concealed) {
         mapped.fieldType = sdk.ItemFieldType.Concealed;
       }
-      // If the field had no section, put it in a default section so it doesn't
-      // collide with the built-in root area
       if (mapped.sectionId === undefined) {
         mapped.sectionId = "additional";
       }
       sectionFields.push(mapped);
     }
 
-  
     newItem.fields = [...builtInFields, ...sectionFields];
   }
-
 
   if (item.sections && item.sections.length > 0) {
     newItem.sections = item.sections.map(section => ({
@@ -740,14 +694,12 @@ function buildCustomAsLogin(item, vaultId) {
     }));
   }
 
-
   if (newItem.fields?.some(f => f.sectionId === "additional")) {
     if (!newItem.sections) newItem.sections = [];
     if (!newItem.sections.some(s => s.id === "additional")) {
       newItem.sections.push({ id: "additional", title: "Additional Details" });
     }
   }
-
 
   if (item.files && item.files.length > 0) {
     newItem.files = [];
@@ -779,9 +731,7 @@ function buildCustomAsLogin(item, vaultId) {
     }
   }
 
-
   newItem.tags = item.tags && item.tags.length > 0 ? [...item.tags, 'migrated'] : ['migrated'];
-
 
   if (item.websites && item.websites.length > 0) {
     newItem.websites = item.websites.map(website => ({
@@ -809,7 +759,6 @@ function buildNewItem(item, newVaultId, vaultId) {
     vaultId: newVaultId
   };
 
-
   if (item.notes && item.notes.trim() !== "") {
     newItem.notes = item.notes;
   } else if (item.category === sdk.ItemCategory.SecureNote) {
@@ -819,21 +768,15 @@ function buildNewItem(item, newVaultId, vaultId) {
     newItem.category = sdk.ItemCategory.SshKey;
   }
 
-
   if (item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard) {
     newItem.category = sdk.ItemCategory.CreditCard;
     if (item.fields && item.fields.length > 0) {
       newItem.fields = buildCreditCardFields(item.fields, vaultId);
     }
 
-    // For credit cards, the section with id="" MUST be FIRST — this is where
-    // built-in fields (cardholder, type, number, cvv, expiry, validFrom) render.
-    // Then named sections (contactInfo, details) follow in order.
-    // This matches the Python Lambda pattern: ItemSection(id='', title='') first.
     newItem.sections = [
       { id: "", title: "" }
     ];
-
 
     if (item.sections && item.sections.length > 0) {
       for (const section of item.sections) {
@@ -845,7 +788,6 @@ function buildNewItem(item, newVaultId, vaultId) {
         }
       }
     }
-
 
     if (newItem.fields) {
       for (const field of newItem.fields) {
@@ -871,7 +813,6 @@ function buildNewItem(item, newVaultId, vaultId) {
       const builtInFields = [];
       const sectionFields = [];
 
-  
       const sectionIdRemap = {};
       if (item.sections) {
         for (const s of item.sections) {
@@ -893,7 +834,6 @@ function buildNewItem(item, newVaultId, vaultId) {
           if (!mapped.sectionId || mapped.sectionId === undefined) {
             mapped.sectionId = "add more";
           } else if (sectionIdRemap[mapped.sectionId]) {
-      
             mapped.sectionId = sectionIdRemap[mapped.sectionId];
           }
           sectionFields.push(mapped);
@@ -903,7 +843,6 @@ function buildNewItem(item, newVaultId, vaultId) {
       newItem.fields = [...builtInFields, ...sectionFields];
     }
 
-
     const referencedSectionIds = new Set();
     if (newItem.fields) {
       for (const field of newItem.fields) {
@@ -912,7 +851,6 @@ function buildNewItem(item, newVaultId, vaultId) {
         }
       }
     }
-
 
     const sectionIdRemap = {};
     const sourceSectionMap = {};
@@ -928,9 +866,7 @@ function buildNewItem(item, newVaultId, vaultId) {
       }
     }
 
-    // Root section must be first
     newItem.sections = [{ id: "", title: "" }];
-
 
     for (const sid of referencedSectionIds) {
       const sourceSection = sourceSectionMap[sid];
@@ -949,7 +885,6 @@ function buildNewItem(item, newVaultId, vaultId) {
     newItem.notes = item.notes || "Migrated Secure Note";
   }
 
-
   if (!(item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard ||
         item.category === 'Database' || item.category === sdk.ItemCategory.Database)) {
     if (item.sections && item.sections.length > 0) {
@@ -959,7 +894,6 @@ function buildNewItem(item, newVaultId, vaultId) {
       }));
     }
   }
-
 
   if (item.files && item.files.length > 0) {
     newItem.files = [];
@@ -994,9 +928,7 @@ function buildNewItem(item, newVaultId, vaultId) {
     }
   }
 
-
   newItem.tags = item.tags && item.tags.length > 0 ? [...item.tags, 'migrated'] : ['migrated'];
-
 
   if (item.websites && item.websites.length > 0) {
     newItem.websites = item.websites.map(website => ({
@@ -1026,7 +958,6 @@ app.get('/migration/env-status', (req, res) => {
     hasDestToken: !!envConfig.destToken,
     hasSourceAccount: !!envConfig.sourceAccount,
     hasDestAccount: !!envConfig.destAccount,
-
     hasBothTokens: !!(envConfig.sourceToken && envConfig.destToken),
     hasBothAccounts: !!(envConfig.sourceAccount && envConfig.destAccount),
     ready: envConfig.authMode === 'service-account'
@@ -1143,7 +1074,6 @@ async function getVaultItemCount(vaultId, sdkInstanceOrToken, { skipArchived = f
   try {
     let sdkInstance;
     if (typeof sdkInstanceOrToken === 'string') {
-
       sdkInstance = new OnePasswordSDK({ token: sdkInstanceOrToken });
       await sdkInstance.initializeClient();
     } else {
@@ -1173,17 +1103,9 @@ async function getVaultItemCount(vaultId, sdkInstanceOrToken, { skipArchived = f
     return 0;
   }
 }
-// Strategy:
-//   1. Build all new items, stripping Reference fields entirely (SDK rejects empty refs)
-//   2. Separate items with binary content (documents/files) — these must be created individually
-//   3. Batch create the rest using createAll
-//   4. Build sourceId → destId map from responses
-//   5. For items that had Reference fields, fetch the dest item, add the ref field
-//      with the remapped dest ID, and save via items.put
 
 const BATCH_SIZE = 100;
 
-// Rate limit: 1000 writes/hour. Batch createAll = 1 call (up to 100 items).
 const RATE_LIMIT_WINDOW = 60 * 60 * 1000; 
 const RATE_LIMIT_MAX = 1000;
 
@@ -1215,13 +1137,11 @@ const rateLimitTracker = {
     return Math.max(0, RATE_LIMIT_MAX - this.getUsed());
   },
   
-  
   estimateCalls(vaultItemCounts) {
     let total = 0;
     for (const count of vaultItemCounts) {
       if (count === 0) { total += 1; continue; }
       const vaultCreate = 1;
-      
       const individualEstimate = Math.ceil(count * 0.1);
       const batchableEstimate = count - individualEstimate;
       const batchCalls = Math.ceil(batchableEstimate / BATCH_SIZE);
@@ -1249,8 +1169,6 @@ const rateLimitTracker = {
   }
 };
 
-// Desktop Phase 1: Read all vault items into memory
-// Returns an array of { vaultId, vaultName, items, sourceItemCount } objects
 async function desktopReadAllVaults(sourceSDK, vaultsToRead, isCancelled, onProgress = null) {
   const vaultData = [];
 
@@ -1263,7 +1181,6 @@ async function desktopReadAllVaults(sourceSDK, vaultsToRead, isCancelled, onProg
       const sourceItemCount = await getVaultItemCount(vault.id, sourceSDK, { skipArchived: true });
       const items = await sourceSDK.listVaultItems(vault.id);
       logger.info(vault.id, `[Desktop Phase 1] Read ${items.length} items from "${vault.name}"`);
-
 
       for (const item of items) {
         if (item.category === 'Document' || item.category === sdk.ItemCategory.Document) {
@@ -1283,13 +1200,11 @@ async function desktopReadAllVaults(sourceSDK, vaultsToRead, isCancelled, onProg
           }
         }
 
-        // For credit cards: fetch full fields (no CLI fallback in desktop mode — no service account token)
         if (item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard) {
           try {
             const fullItem = await retryWithBackoff(() => sourceSDK.client.items.get(vault.id, item.id));
             item.fields = fullItem.fields;
 
-            // Try CLI fallback for expiry using desktop auth (no token, uses desktop app)
             const expiryField = item.fields?.find(f => f.id === 'expiry');
             if (expiryField && (!expiryField.value || expiryField.fieldType === 'Unsupported')) {
               try {
@@ -1311,21 +1226,18 @@ async function desktopReadAllVaults(sourceSDK, vaultsToRead, isCancelled, onProg
         }
       }
 
-      vaultData.push({ vaultId: vault.id, vaultName: vault.name, vaultType: vault.vaultType || 'shared', items, sourceItemCount });
+      vaultData.push({ vaultId: vault.id, vaultName: vault.name, vaultType: vault.vaultType || 'shared', items, sourceItemCount, suffix: vault.suffix || '' });
     } catch (error) {
       logger.error(vault.id, `[Desktop Phase 1] Failed to read vault "${vault.name}": ${error.message}`);
       logger.logFailedVault(vault.id, vault.name, error);
-      vaultData.push({ vaultId: vault.id, vaultName: vault.name, vaultType: vault.vaultType || 'shared', items: [], sourceItemCount: 0, error: error.message });
+      vaultData.push({ vaultId: vault.id, vaultName: vault.name, vaultType: vault.vaultType || 'shared', items: [], sourceItemCount: 0, error: error.message, suffix: vault.suffix || '' });
     }
   }
 
   return vaultData;
 }
 
-// Desktop Phase 2: Write items to destination
-// Takes items already read from source, creates vault and writes items to dest
-// For personal vaults: finds the existing Private vault on dest instead of creating a new one
-async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelled, onProgress = null) {
+async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelled, onProgress = null, suffix = '') {
   const { vaultId, vaultName, items, sourceItemCount, vaultType } = vaultData;
   const isPersonal = vaultType === 'personal';
 
@@ -1334,7 +1246,6 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
   let newVaultId;
 
   if (isPersonal) {
-    // Personal vault: find the existing Private/Employee vault on the destination account
     logger.info(vaultId, `[Desktop Phase 2] Personal vault — looking for existing Private vault on destination`);
     try {
       const destVaults = await destSDK.listVaults();
@@ -1343,7 +1254,6 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
         newVaultId = privateVault.id;
         logger.info(vaultId, `[Desktop Phase 2] Found destination Private vault: "${privateVault.name}" [${newVaultId}]`);
       } else {
-    
         const byName = destVaults.find(v => {
           const n = (v.name || '').toLowerCase();
           return n === 'private' || n === 'employee' || n.includes('employee vault');
@@ -1360,8 +1270,7 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
       throw new Error(`Could not find destination Private vault: ${error.message}`);
     }
   } else {
-  
-    const destVaultName = `${vaultName} (Migrated)`;
+    const destVaultName = suffix ? `${vaultName} (Migrated - ${suffix})` : `${vaultName} (Migrated)`;
     try {
       const args = ['vault', 'create', destVaultName, '--format', 'json'];
       if (destAccountName) args.push('--account', destAccountName);
@@ -1387,7 +1296,6 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
   const idMap = new Map();
   const itemsWithRefs = [];
 
-
   const batchableItems = [];
   const individualItems = [];
 
@@ -1400,7 +1308,6 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
       if (item.document) {
         newItem.document = item.document;
       }
-
 
       const refFields = [];
       if (newItem.fields) {
@@ -1446,7 +1353,7 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
       const batchResponse = await retryWithBackoff(() =>
         destSDK.client.items.createAll(newVaultId, itemsForBatch)
       );
-      rateLimitTracker.record(); 
+      rateLimitTracker.record();
 
       for (let j = 0; j < batchResponse.individualResponses.length; j++) {
         const res = batchResponse.individualResponses[j];
@@ -1505,7 +1412,6 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
     if (onProgress) onProgress(processedItems, items.length, successCount, failureCount);
   }
 
-
   if (itemsWithRefs.length > 0) {
     logger.info(vaultId, `[Desktop Phase 2] Adding reference fields to ${itemsWithRefs.length} items`);
     for (const ref of itemsWithRefs) {
@@ -1547,16 +1453,13 @@ async function desktopWriteVault(vaultData, destSDK, destAccountName, isCancelle
   return { itemsLength: items.length, migrationResults, sourceItemCount, destItemCount, successCount, failureCount };
 }
 
-async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSDK, destSDK, isCancelled, onProgress = null, authMode = 'service-account', destAccountName = null) {
+async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSDK, destSDK, isCancelled, onProgress = null, authMode = 'service-account', destAccountName = null, suffix = '') {
   logger.info(vaultId, `Starting migration for vault ${vaultName}`);
-
 
   const sourceItemCount = await getVaultItemCount(vaultId, sourceSDK, { skipArchived: true });
   logger.info(vaultId, `Source item count: ${sourceItemCount}`);
 
-
-  const destVaultName = `${vaultName} (Migrated)`;
-
+  const destVaultName = suffix ? `${vaultName} (Migrated - ${suffix})` : `${vaultName} (Migrated)`;
 
   let newVaultId;
   try {
@@ -1579,7 +1482,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
     throw new Error(`Vault creation failed: ${error.message}`);
   }
 
-
   let items;
   try {
     items = await sourceSDK.listVaultItems(vaultId);
@@ -1599,12 +1501,8 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
   let successCount = 0;
   let failureCount = 0;
 
-
   const idMap = new Map();
-  // Track which built items have reference fields that need remapping
-  // Each entry: { sourceItemId, destItemId (filled after create), refFields: [{fieldId, sourceRefId}] }
   const itemsWithRefs = [];
-
 
   logger.info(vaultId, `Phase 1: Building item objects...`);
 
@@ -1625,7 +1523,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         logger.info(vaultId, `[DEBUG] Source notes present: ${!!(item.notes && item.notes.trim())}`);
       }
 
-
       if (item.category === 'Document' || item.category === sdk.ItemCategory.Document) {
         try {
           const fullItem = await retryWithBackoff(() => sourceSDK.client.items.get(vaultId, item.id));
@@ -1643,14 +1540,11 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         }
       }
 
-
       if (item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard) {
         try {
           const fullItem = await retryWithBackoff(() => sourceSDK.client.items.get(vaultId, item.id));
           item.fields = fullItem.fields;
 
-          // The SDK returns fieldType "Unsupported" and empty value for the expiry
-          // field. Fall back to CLI to retrieve the actual expiry date.
           const expiryField = item.fields?.find(f => f.id === 'expiry');
           if (expiryField && (!expiryField.value || expiryField.fieldType === 'Unsupported')) {
             try {
@@ -1674,7 +1568,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         }
       }
 
-
       const newItem = buildNewItem(item, newVaultId, vaultId);
       if (DEBUG_ENABLED) {
         logger.info(vaultId, `[DEBUG] Built dest item "${newItem.title}" — category: "${newItem.category}"`);
@@ -1689,14 +1582,10 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         logger.info(vaultId, `[DEBUG] Full redacted payload: ${JSON.stringify(redactItemForLog(newItem))}`);
       }
 
-
       if (item.document) {
         newItem.document = item.document;
       }
 
-      // Check for reference fields — REMOVE them entirely for initial creation
-      // (SDK rejects Reference fields with empty/invalid values)
-      // We'll add them back in Phase 3 after we have the sourceId→destId map
       const refFields = [];
       if (newItem.fields) {
         const fieldsWithoutRefs = [];
@@ -1708,9 +1597,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
               sectionId: field.sectionId,
               sourceRefId: field._sourceRefId
             });
-            // Don't include this field in the item — skip it
           } else {
-      
             delete field._isReference;
             delete field._sourceRefId;
             fieldsWithoutRefs.push(field);
@@ -1719,9 +1606,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         newItem.fields = fieldsWithoutRefs;
       }
 
-      // Determine if this item needs individual creation:
-      // - Items with binary content (files/documents)
-      // - Credit card items (batch createAll has issues with CreditCard category)
       const isCreditCard = item.category === 'CreditCard' || item.category === sdk.ItemCategory.CreditCard;
       const hasBinary = !!(item.document || (item.files && item.files.length > 0));
       const needsIndividualCreate = hasBinary || isCreditCard;
@@ -1745,7 +1629,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
     }
   }
 
-
   logger.info(vaultId, `Phase 2: Creating items (${batchableItems.length} batchable, ${individualItems.length} individual)...`);
   for (let i = 0; i < batchableItems.length; i += BATCH_SIZE) {
     if (isCancelled()) {
@@ -1765,7 +1648,7 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
       const batchResponse = await retryWithBackoff(() =>
         destSDK.client.items.createAll(newVaultId, itemsForBatch)
       );
-      rateLimitTracker.record(); 
+      rateLimitTracker.record();
 
       for (let j = 0; j < batchResponse.individualResponses.length; j++) {
         const res = batchResponse.individualResponses[j];
@@ -1773,7 +1656,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         processedItems++;
 
         if (res.content) {
-          
           idMap.set(entry.sourceId, res.content.id);
           successCount++;
           migrationResults.push({ id: entry.sourceId, title: entry.sourceTitle, success: true, progress: (processedItems / items.length) * 100 });
@@ -1798,8 +1680,6 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
         }
       }
     } catch (error) {
-      
-      
       const dbItemsInBatch = DEBUG_ENABLED ? chunk : [];
       if (dbItemsInBatch.length > 0) {
         logger.error(vaultId, `[DEBUG] Entire batch failed containing ${dbItemsInBatch.length} item(s): ${formatErrorForLog(error)}`);
@@ -1867,14 +1747,12 @@ async function migrateVault(vaultId, vaultName, sourceToken, destToken, sourceSD
 
     for (const ref of itemsWithRefs) {
       try {
-        
         const destItem = await retryWithBackoff(() => destSDK.client.items.get(newVaultId, ref.destItemId));
 
         let updated = false;
         for (const refField of ref.refFields) {
           const newRefId = idMap.get(refField.sourceRefId);
           if (newRefId) {
-            
             if (!destItem.fields) destItem.fields = [];
             destItem.fields.push({
               id: refField.fieldId,
@@ -1964,7 +1842,7 @@ function createSDKInstance(authMode, token, accountName) {
   }
   return new OnePasswordSDK({ token });
 }
-// POST: Start migration — stores credentials in a session, returns session ID
+
 app.post('/migration/start', (req, res) => {
   const { sourceToken, destToken, authMode, sourceAccountName, destAccountName, useEnv, vaults } = req.body;
 
@@ -1985,13 +1863,11 @@ app.post('/migration/start', (req, res) => {
     createdAt: Date.now()
   });
 
-  // Auto-expire session
   setTimeout(() => migrationSessions.delete(sessionId), SESSION_TTL);
 
   res.json({ success: true, sessionId });
 });
 
-// GET: SSE migration stream — only accepts session ID, no tokens in URL
 app.get('/migration/migrate-all-vaults', async (req, res) => {
   const { sessionId } = req.query;
   const session = sessionId ? migrationSessions.get(sessionId) : null;
@@ -2004,7 +1880,6 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
     return;
   }
 
-  // Consume session — single use
   migrationSessions.delete(sessionId);
 
   const { sourceToken, destToken, authMode, sourceAccountName, destAccountName, useEnv, vaults } = session;
@@ -2062,8 +1937,6 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
   }
   try {
     
-    // DESKTOP AUTH
-    
     if (mode === 'desktop') {
 
       sseWrite(`data: ${JSON.stringify({
@@ -2076,10 +1949,10 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
 
       let vaultsToMigrate;
       if (selectedVaults && selectedVaults.length > 0) {
-        vaultsToMigrate = selectedVaults.map(v => ({ id: v.vaultId, name: v.vaultName, vaultType: v.vaultType || 'shared' }));
+        vaultsToMigrate = selectedVaults.map(v => ({ id: v.vaultId, name: v.vaultName, vaultType: v.vaultType || 'shared', suffix: v.suffix || '' }));
       } else {
         const allVaults = await sourceSDK.listVaults();
-        vaultsToMigrate = allVaults.map(v => ({ id: v.id, name: v.name, vaultType: v.vaultType || 'shared' }));
+        vaultsToMigrate = allVaults.map(v => ({ id: v.id, name: v.name, vaultType: v.vaultType || 'shared', suffix: '' }));
       }
 
       const totalVaults = vaultsToMigrate.length;
@@ -2104,7 +1977,6 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
         if (clientConnected) res.end();
         return;
       }
-
 
       sseWrite(`data: ${JSON.stringify({
         progress: 0,
@@ -2162,11 +2034,9 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
             })}\n\n`);
           };
 
-          const result = await desktopWriteVault(vaultData, destSDK, resolvedDestAccount, () => isMigrationCancelled, progressCallback);
+          const result = await desktopWriteVault(vaultData, destSDK, resolvedDestAccount, () => isMigrationCancelled, progressCallback, vaultData.suffix || '');
           const { itemsLength, migrationResults: vaultResults, sourceItemCount, destItemCount, successCount, failureCount } = result;
 
-          // For personal vaults, destItemCount includes pre-existing items so we can't compare counts
-          // Instead, check that all items succeeded with no failures
           const isPersonalVault = vaultData.vaultType === 'personal';
           const isSuccess = isPersonalVault
             ? (failureCount === 0 && successCount === itemsLength)
@@ -2211,8 +2081,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
       if (clientConnected) res.end();
       return;
     }
-    // SERVICE ACCOUNT
-    
+
     const sourceSDK = createSDKInstance(mode, resolvedSourceToken, resolvedSourceAccount);
     await sourceSDK.initializeClient();
     const destSDK = createSDKInstance('service-account', resolvedDestToken);
@@ -2220,7 +2089,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
 
     let vaultsToMigrate;
     if (selectedVaults && selectedVaults.length > 0) {
-      vaultsToMigrate = selectedVaults.map(v => ({ id: v.vaultId, name: v.vaultName }));
+      vaultsToMigrate = selectedVaults.map(v => ({ id: v.vaultId, name: v.vaultName, suffix: v.suffix || '' }));
     } else {
       vaultsToMigrate = await sourceSDK.listVaults();
     }
@@ -2259,7 +2128,7 @@ app.get('/migration/migrate-all-vaults', async (req, res) => {
 
         const result = await migrateVault(
           vault.id, vault.name, resolvedSourceToken, resolvedDestToken, sourceSDK, destSDK,
-          () => isMigrationCancelled, progressCallback, mode, resolvedDestAccount
+          () => isMigrationCancelled, progressCallback, mode, resolvedDestAccount, vault.suffix || ''
         );
 
         const { itemsLength, migrationResults: vaultResults, sourceItemCount, destItemCount, successCount, failureCount } = result;
@@ -2388,12 +2257,6 @@ app.post('/migration/debug', (req, res) => {
   res.json({ success: true, enabled: DEBUG_ENABLED });
 });
 class OnePasswordSDK {
-  /**
-   * @param {object} options
-   * @param {string} [options.token]
-   * @param {string} [options.authMode]
-   * @param {string} [options.accountName]
-   */
   constructor({ token, authMode = 'service-account', accountName } = {}) {
     this.token = token || null;
     this.authMode = authMode;
@@ -2408,7 +2271,6 @@ class OnePasswordSDK {
       logger.info(null, `Initializing 1Password SDK client (mode: ${this.authMode})`);
 
       if (this.authMode === 'desktop') {
-        
         if (!this.accountName) throw new Error('Account name is required for desktop auth.');
         this.client = await sdk.createClient({
           auth: new sdk.DesktopAuth(this.accountName),
@@ -2416,7 +2278,6 @@ class OnePasswordSDK {
           integrationVersion: "2.1.0",
         });
       } else {
-        
         if (!this.token) throw new Error('Service account token is required.');
         this.client = await sdk.createClient({
           auth: this.token,
@@ -2501,7 +2362,6 @@ class OnePasswordSDK {
           for (let idx = 0; idx < batchResponse.individualResponses.length; idx++) {
             const res = batchResponse.individualResponses[idx];
             if (res.content) {
-              
               if (DEBUG_ENABLED) {
                 logger.info(vaultId, `[DEBUG] getAll returned "${res.content.title}" [${res.content.id}] — category: "${res.content.category}", fields: ${res.content.fields?.length || 0}, sections: ${res.content.sections?.length || 0}`);
                 logger.info(vaultId, `[DEBUG] getAll raw fields: ${JSON.stringify(redactFieldsForLog(res.content.fields || []))}`);
@@ -2510,10 +2370,8 @@ class OnePasswordSDK {
               fullItems.push(res.content);
             } else if (res.error) {
               const errMsg = typeof res.error === 'string' ? res.error : JSON.stringify(res.error);
-              
               const failedItemId = chunkIds[idx] || 'unknown';
               logger.error(vaultId, `Batch get failed for item [${failedItemId}]: ${errMsg}`);
-              
               const matchingOverview = itemOverviews.find(o => o.id === failedItemId);
               if (matchingOverview && DEBUG_ENABLED) {
                 logger.error(vaultId, `[DEBUG] getAll FAILED for item "${matchingOverview.title}" [${failedItemId}]: ${formatErrorForLog(typeof res.error === 'object' ? res.error : { message: errMsg })}`);
@@ -2522,7 +2380,6 @@ class OnePasswordSDK {
             }
           }
         } catch (batchError) {
-          
           logger.warning(vaultId, `Batch getAll failed, falling back to individual gets: ${batchError.message}`);
           for (const id of chunkIds) {
             try {
@@ -2535,7 +2392,6 @@ class OnePasswordSDK {
               fullItems.push(item);
             } catch (itemError) {
               logger.error(vaultId, `Failed to get item ${id}: ${formatErrorForLog(itemError)}`);
-              
               const matchingOverview = itemOverviews.find(o => o.id === id);
               if (matchingOverview && DEBUG_ENABLED) {
                 logger.error(vaultId, `[DEBUG] Individual get FAILED for "${matchingOverview.title}" [${id}]: ${formatErrorForLog(itemError)}`);
@@ -2631,7 +2487,6 @@ class OnePasswordSDK {
           items.push(itemData);
         } catch (processError) {
           logger.error(vaultId, `Failed to process item ${fullItem.id}: ${processError.message}`);
-          
           if (DEBUG_ENABLED) {
             logger.error(vaultId, `[DEBUG] Processing FAILED for item "${fullItem.title}" [${fullItem.id}]: ${formatErrorForLog(processError)}`);
           }
