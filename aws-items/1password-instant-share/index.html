@@ -1,0 +1,777 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Credential Generator · 1Password</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg:#13161f;--bg2:#1a1e2a;--surface:#1f2335;--surface2:#252b3b;--surface3:#2c3347;
+      --border:#323a52;--border-focus:#0094ff;--blue:#0094ff;--blue-dim:rgba(0,148,255,0.12);
+      --blue-border:rgba(0,148,255,0.35);--green:#1ec47e;--green-dim:rgba(30,196,126,0.12);
+      --red:#f55353;--red-dim:rgba(245,83,83,0.1);--amber:#f5a623;--amber-dim:rgba(245,166,35,0.08);
+      --orange:#e67e22;--orange-dim:rgba(230,126,34,0.12);--orange-border:rgba(230,126,34,0.35);
+      --purple:#a855f7;--purple-dim:rgba(168,85,247,0.12);--purple-border:rgba(168,85,247,0.35);
+      --t1:#e8eaf2;--t2:#8892b0;--t3:#4a5270;--t4:#2e3450;
+      --font:'Inter',-apple-system,sans-serif;--radius:10px;--radius-sm:6px;
+    }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:var(--font);background:var(--bg);color:var(--t1);min-height:100vh;padding:40px 20px 80px;
+      background-image:radial-gradient(ellipse 60% 35% at 50% 0%,rgba(0,148,255,0.07) 0%,transparent 70%)}
+    .header{max-width:1020px;margin:0 auto 24px;display:flex;align-items:center;gap:14px}
+    .logo-mark{width:44px;height:44px;flex-shrink:0}
+    .header-text h1{font-size:24px;font-weight:700;color:var(--t1);letter-spacing:-0.3px}
+    .header-text p{font-size:14px;color:var(--t2);margin-top:2px}
+    .enc-badge{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:var(--green);
+      background:var(--green-dim);border:1px solid rgba(30,196,126,0.25);padding:2px 8px;border-radius:10px;
+      margin-left:8px;vertical-align:middle}
+    .mode-bar{max-width:1020px;margin:0 auto 20px;display:flex;gap:6px;background:var(--surface);
+      border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px}
+    .mode-btn{flex:1;padding:11px 16px;border:none;background:transparent;color:var(--t2);
+      border-radius:5px;font-size:14px;font-weight:500;font-family:var(--font);cursor:pointer;
+      transition:all 0.15s;display:flex;align-items:center;justify-content:center;gap:7px}
+    .mode-btn:hover{color:var(--t1)}
+    .mode-btn.on{background:var(--surface3);color:var(--t1);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+    .mode-btn.okta-on{background:rgba(230,126,34,0.15);color:var(--orange);border:1px solid var(--orange-border)}
+    .mode-btn.reset-on{background:rgba(168,85,247,0.15);color:var(--purple);border:1px solid var(--purple-border)}
+    .notice{max-width:1020px;margin:0 auto 20px;background:var(--amber-dim);border:1px solid rgba(245,166,35,0.2);
+      border-radius:var(--radius-sm);padding:13px 16px;font-size:13px;color:#c9922a;
+      display:flex;align-items:flex-start;gap:8px}
+    .notice svg{flex-shrink:0;margin-top:1px}
+    .notice ul{list-style:none;display:flex;flex-wrap:wrap;gap:2px 20px}
+    .notice li::before{content:'· '}
+    .duration-bar{max-width:1020px;margin:0 auto 20px;display:flex;align-items:center;gap:12px;
+      background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px}
+    .duration-bar label{font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;
+      color:var(--t3);white-space:nowrap}
+    .duration-select{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+      padding:9px 12px;font-size:14px;color:var(--t1);font-family:var(--font);cursor:pointer;flex:1;max-width:260px}
+    .duration-select:focus{outline:none;border-color:var(--border-focus)}
+    .duration-hint{font-size:12px;color:var(--t3);font-style:italic}
+    .queue-wrap{max-width:1020px;margin:0 auto}
+    .queue-meta{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+    .queue-label{font-size:12px;font-weight:600;letter-spacing:0.8px;text-transform:uppercase;color:var(--t3)}
+    .queue-badge{font-size:12px;font-weight:600;color:var(--blue);background:var(--blue-dim);
+      border:1px solid var(--blue-border);padding:2px 9px;border-radius:20px}
+    .queue-badge.okta{color:var(--orange);background:var(--orange-dim);border-color:var(--orange-border)}
+    .queue-badge.reset{color:var(--purple);background:var(--purple-dim);border-color:var(--purple-border)}
+    .queue-list{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
+    .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+      overflow:hidden;transition:border-color 0.15s,box-shadow 0.15s}
+    .card:focus-within{border-color:rgba(0,148,255,0.4);box-shadow:0 0 0 3px rgba(0,148,255,0.07)}
+    .card.okta-card{border-color:rgba(230,126,34,0.25)}
+    .card.okta-card:focus-within{border-color:rgba(230,126,34,0.5);box-shadow:0 0 0 3px rgba(230,126,34,0.07)}
+    .card.reset-card{border-color:rgba(168,85,247,0.25)}
+    .card.reset-card:focus-within{border-color:rgba(168,85,247,0.5);box-shadow:0 0 0 3px rgba(168,85,247,0.07)}
+    .card-head{display:flex;align-items:center;justify-content:space-between;padding:13px 16px;
+      background:var(--surface2);border-bottom:1px solid var(--border);cursor:pointer;user-select:none;gap:10px}
+    .card-head:hover{background:var(--surface3)}
+    .card-identity{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
+    .card-icon{width:32px;height:32px;border-radius:8px;
+      background:linear-gradient(135deg,#1a4a7a 0%,#0e2d55 100%);
+      border:1px solid rgba(0,148,255,0.2);display:flex;align-items:center;justify-content:center;
+      flex-shrink:0;font-size:13px}
+    .card-icon.okta-icon{background:linear-gradient(135deg,#5c3d1a 0%,#3d2a12 100%);border-color:rgba(230,126,34,0.3)}
+    .card-icon.reset-icon{background:linear-gradient(135deg,#4a2a6e 0%,#2d1a45 100%);border-color:rgba(168,85,247,0.3)}
+    .card-info{min-width:0}
+    .card-name{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .card-email{font-size:12px;color:var(--blue);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .card-email.reset-email{color:var(--purple)}
+    .card-controls{display:flex;align-items:center;gap:6px;flex-shrink:0}
+    .status-pip{width:7px;height:7px;border-radius:50%;background:var(--border);flex-shrink:0;
+      transition:background 0.3s,box-shadow 0.3s}
+    .status-pip.ready{background:var(--blue);box-shadow:0 0 7px rgba(0,148,255,0.6)}
+    .status-pip.sent{background:var(--green);box-shadow:0 0 7px rgba(30,196,126,0.6)}
+    .status-pip.error{background:var(--red)}
+    .icon-btn{width:28px;height:28px;display:flex;align-items:center;justify-content:center;
+      background:none;border:none;cursor:pointer;color:var(--t3);border-radius:5px;transition:all 0.12s;font-size:12px}
+    .icon-btn:hover{background:var(--surface3);color:var(--t2)}
+    .icon-btn.del:hover{background:var(--red-dim);color:var(--red)}
+    .chevron{color:var(--t4);font-size:9px;transition:transform 0.2s}
+    .card.closed .chevron{transform:rotate(-90deg)}
+    .card-body{padding:20px;display:grid;grid-template-columns:1fr 1fr;gap:16px 24px}
+    .card.closed .card-body{display:none}
+    .span2{grid-column:1/-1}
+    .field{display:flex;flex-direction:column;gap:5px}
+    .field>label{font-size:12px;font-weight:600;letter-spacing:0.4px;text-transform:uppercase;color:var(--t3)}
+    .field>label .opt{font-weight:400;text-transform:none;letter-spacing:0;color:var(--t4);font-size:10px}
+    .field input,.field select{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);
+      padding:11px 13px;font-size:14.5px;font-family:var(--font);color:var(--t1);width:100%;
+      transition:border-color 0.15s,box-shadow 0.15s}
+    .field input:focus,.field select:focus{outline:none;border-color:var(--border-focus);
+      box-shadow:0 0 0 3px rgba(0,148,255,0.1)}
+    .field input::placeholder{color:var(--t4)}
+    .recipe-panel{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px}
+    .type-tabs{display:flex;gap:5px;margin-bottom:14px;background:var(--bg);border-radius:var(--radius-sm);padding:3px}
+    .tab-btn{flex:1;padding:8px 10px;border:none;background:transparent;color:var(--t2);border-radius:5px;
+      font-size:13px;font-weight:500;font-family:var(--font);cursor:pointer;transition:all 0.15s;white-space:nowrap}
+    .tab-btn:hover{color:var(--t1)}
+    .tab-btn.on{background:var(--surface3);color:var(--t1);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.3)}
+    .opts{display:none}.opts.on{display:block}
+    .slider-row{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .slider-row span.lbl{font-size:13px;color:var(--t2);min-width:80px}
+    .slider-row input[type="range"]{flex:1;height:4px;-webkit-appearance:none;appearance:none;
+      background:var(--border);border-radius:2px;outline:none;cursor:pointer}
+    .slider-row input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:14px;height:14px;
+      border-radius:50%;background:var(--blue);cursor:pointer;border:2px solid var(--surface);
+      box-shadow:0 0 0 1px var(--blue)}
+    .slider-val{font-size:13px;font-weight:600;color:var(--blue);min-width:22px;text-align:right}
+    .checks{display:flex;gap:14px;margin-bottom:10px;flex-wrap:wrap}
+    .chk{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);cursor:pointer}
+    .chk input[type="checkbox"]{accent-color:var(--blue);width:14px;height:14px;cursor:pointer}
+    .recipe-select{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);
+      padding:9px 12px;font-size:14px;color:var(--t1);width:100%;margin-bottom:10px;font-family:var(--font);cursor:pointer}
+    .recipe-select:focus{outline:none;border-color:var(--border-focus)}
+    .pw-row{display:flex;gap:7px;align-items:flex-start;margin-top:14px;flex-wrap:wrap}
+    .pw-field-wrap{flex:1;min-width:160px;position:relative}
+    .pw-field{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-sm);
+      padding:11px 36px 11px 13px;font-family:'Menlo','Consolas',monospace;font-size:14px;color:var(--t1);
+      letter-spacing:0.3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:border-color 0.15s}
+    .pw-field.show{white-space:normal;word-break:break-all;overflow:visible}
+    .pw-field:focus{outline:none}
+    .pw-field.has-value{border-color:rgba(0,148,255,0.3)}
+    .eye-btn{position:absolute;right:8px;top:9px;background:none;border:none;cursor:pointer;
+      color:var(--t3);line-height:1;padding:1px;transition:color 0.12s}
+    .eye-btn:hover{color:var(--t2)}
+    .pw-btns{display:flex;gap:6px}
+    .pill-btn{padding:9px 15px;border-radius:var(--radius-sm);font-size:13px;font-weight:600;
+      font-family:var(--font);cursor:pointer;white-space:nowrap;border:1px solid transparent;transition:all 0.14s}
+    .btn-gen{background:var(--blue-dim);border-color:var(--blue-border);color:var(--blue)}
+    .btn-gen:hover:not(:disabled){background:rgba(0,148,255,0.2);border-color:var(--blue)}
+    .btn-gen:disabled{opacity:0.4;cursor:not-allowed}
+    .btn-cp{background:var(--green-dim);border-color:rgba(30,196,126,0.3);color:var(--green)}
+    .btn-cp:hover{background:rgba(30,196,126,0.2);border-color:var(--green)}
+    .btn-cp.ok{background:rgba(30,196,126,0.25)}
+    .pw-hint{font-size:12px;color:var(--t3);margin-top:6px;min-height:14px;font-style:italic}
+    .okta-info{background:var(--orange-dim);border:1px solid var(--orange-border);border-radius:var(--radius-sm);
+      padding:13px 16px;font-size:13px;color:var(--orange);display:flex;align-items:flex-start;gap:8px;margin-top:10px}
+    .okta-info svg{flex-shrink:0;margin-top:1px}
+    .reset-info{background:var(--purple-dim);border:1px solid var(--purple-border);border-radius:var(--radius-sm);
+      padding:13px 16px;font-size:13px;color:var(--purple);display:flex;align-items:flex-start;gap:8px;margin-top:10px}
+    .reset-info svg{flex-shrink:0;margin-top:1px}
+    .bottom-bar{max-width:1020px;margin:0 auto;display:flex;gap:10px;flex-wrap:wrap}
+    .btn-add-card{display:flex;align-items:center;gap:8px;padding:12px 20px;background:transparent;
+      border:1px dashed var(--border);border-radius:var(--radius-sm);color:var(--t2);font-size:14px;
+      font-weight:500;font-family:var(--font);cursor:pointer;transition:all 0.14s}
+    .btn-add-card:hover{border-color:var(--blue-border);color:var(--t1);background:var(--blue-dim)}
+    .btn-send-all{flex:1;min-width:200px;padding:13px 28px;
+      background:linear-gradient(135deg,#0070cc 0%,#005fad 100%);border:none;border-radius:var(--radius-sm);
+      color:#fff;font-size:14.5px;font-weight:600;font-family:var(--font);cursor:pointer;
+      display:flex;align-items:center;justify-content:center;gap:8px;transition:all 0.16s;
+      box-shadow:0 1px 3px rgba(0,0,0,0.4),0 4px 12px rgba(0,112,204,0.25)}
+    .btn-send-all:hover:not(:disabled){background:linear-gradient(135deg,#0080e6 0%,#006dc7 100%);
+      box-shadow:0 2px 6px rgba(0,0,0,0.4),0 6px 18px rgba(0,112,204,0.4);transform:translateY(-1px)}
+    .btn-send-all:disabled{opacity:0.45;cursor:not-allowed;transform:none}
+    .btn-send-all.okta-send{background:linear-gradient(135deg,#d35400 0%,#a04000 100%);
+      box-shadow:0 1px 3px rgba(0,0,0,0.4),0 4px 12px rgba(211,84,0,0.25)}
+    .btn-send-all.okta-send:hover:not(:disabled){background:linear-gradient(135deg,#e67e22 0%,#c0540a 100%);
+      box-shadow:0 2px 6px rgba(0,0,0,0.4),0 6px 18px rgba(211,84,0,0.4)}
+    .btn-send-all.reset-send{background:linear-gradient(135deg,#7c3aed 0%,#5b21b6 100%);
+      box-shadow:0 1px 3px rgba(0,0,0,0.4),0 4px 12px rgba(124,58,237,0.25)}
+    .btn-send-all.reset-send:hover:not(:disabled){background:linear-gradient(135deg,#8b5cf6 0%,#6d28d9 100%);
+      box-shadow:0 2px 6px rgba(0,0,0,0.4),0 6px 18px rgba(124,58,237,0.4)}
+    .g-status{max-width:1020px;margin:14px auto 0;border-radius:var(--radius-sm);padding:12px 15px;
+      font-size:14px;display:none;animation:up 0.2s ease}
+    .g-status a{color:inherit;text-decoration:underline;margin-left:8px}
+    @keyframes up{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
+    .g-status.ok{background:var(--green-dim);border:1px solid rgba(30,196,126,0.25);color:var(--green)}
+    .g-status.err{background:var(--red-dim);border:1px solid rgba(245,83,83,0.2);color:var(--red)}
+    .g-status.run{background:var(--blue-dim);border:1px solid var(--blue-border);color:var(--blue)}
+    .prog-wrap{height:2px;background:var(--border);border-radius:1px;margin-top:10px;overflow:hidden;display:none}
+    .prog-wrap.on{display:block}
+    .prog-fill{height:100%;background:linear-gradient(90deg,var(--blue),var(--green));
+      border-radius:1px;transition:width 0.3s ease}
+    @media(max-width:580px){.card-body{grid-template-columns:1fr}.span2{grid-column:1}}
+  </style>
+</head>
+<body>
+<div class="header">
+  <svg class="logo-mark" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <rect width="40" height="40" rx="10" fill="#1B2A4A"/>
+    <circle cx="20" cy="17" r="6" stroke="#0094FF" stroke-width="2.2"/>
+    <rect x="17.3" y="22" width="5.4" height="8" rx="2.7" fill="#0094FF"/>
+    <rect x="19.1" y="26" width="1.8" height="3" rx="0.9" fill="#1B2A4A"/>
+  </svg>
+  <div class="header-text">
+    <h1>Credential Generator <span class="enc-badge">🔒 E2E Encrypted</span></h1>
+    <p>Create and deliver one-time credentials via 1Password Secure Share</p>
+  </div>
+</div>
+<div class="mode-bar">
+  <button class="mode-btn on" id="modeManual" onclick="setMode('manual')">🔑 Manual</button>
+  <button class="mode-btn" id="modeOkta" onclick="setMode('okta')">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/><circle cx="8" cy="8" r="3" fill="currentColor"/></svg>
+    Okta Provision
+  </button>
+  <button class="mode-btn" id="modeReset" onclick="setMode('reset')">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M3.5 8a4.5 4.5 0 1 1 1.3 3.2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M3.5 12V8H7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Okta Reset
+  </button>
+</div>
+<div class="notice" id="noticeManual">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="#c9922a" stroke-width="1.4"/><rect x="6.3" y="3" width="1.4" height="5" rx=".7" fill="#c9922a"/><rect x="6.3" y="9.5" width="1.4" height="1.4" rx=".7" fill="#c9922a"/></svg>
+  <ul>
+    <li>Share links are one-time use only</li>
+    <li>Credentials are deleted immediately after the link is created</li>
+    <li>Previewed passwords are end-to-end encrypted</li>
+  </ul>
+</div>
+<div class="notice" id="noticeOkta" style="display:none;border-color:rgba(230,126,34,0.25);background:var(--orange-dim);color:var(--orange)">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/><rect x="6.3" y="3" width="1.4" height="5" rx=".7" fill="currentColor"/><rect x="6.3" y="9.5" width="1.4" height="1.4" rx=".7" fill="currentColor"/></svg>
+  <ul>
+    <li>Creates user in Okta with an auto-generated password</li>
+    <li>Password is never visible — sent via 1Password share link only</li>
+    <li>Credentials are deleted from 1Password after the share link is created</li>
+  </ul>
+</div>
+<div class="notice" id="noticeReset" style="display:none;border-color:rgba(168,85,247,0.25);background:var(--purple-dim);color:var(--purple)">
+  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/><rect x="6.3" y="3" width="1.4" height="5" rx=".7" fill="currentColor"/><rect x="6.3" y="9.5" width="1.4" height="1.4" rx=".7" fill="currentColor"/></svg>
+  <ul>
+    <li>Resets password for an existing Okta user</li>
+    <li>Password is never visible — sent via 1Password share link only</li>
+    <li>User is looked up by their Okta login email</li>
+  </ul>
+</div>
+<div class="duration-bar">
+  <label>Share Link Expires</label>
+  <select class="duration-select" id="shareDuration">
+    <option value="OneHour">1 Hour</option>
+    <option value="OneDay">24 Hours</option>
+    <option value="SevenDays">7 Days</option>
+    <option value="FourteenDays" selected>14 Days</option>
+    <option value="ThirtyDays">30 Days</option>
+  </select>
+  <span class="duration-hint">One-time view, link destroyed after access</span>
+</div>
+<div class="queue-wrap">
+  <div class="queue-meta">
+    <span class="queue-label">Recipients</span>
+    <span class="queue-badge" id="qBadge">1 queued</span>
+  </div>
+  <div class="queue-list" id="qList"></div>
+  <div class="bottom-bar">
+    <button class="btn-add-card" onclick="addCard()">
+      <svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x=".5" y="5.8" width="12" height="1.4" rx=".7" fill="currentColor"/><rect x="5.8" y=".5" width="1.4" height="12" rx=".7" fill="currentColor"/></svg>
+      Add Recipient
+    </button>
+    <button class="btn-send-all" id="sendBtn" onclick="sendAll()">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M13.5 1.5L1.5 6l5 2 2 5 5-12Z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.5 8.5l3-3" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg>
+      <span>Send Credentials</span>
+    </button>
+  </div>
+  <div class="g-status" id="gStatus"></div>
+  <div class="prog-wrap" id="progWrap"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+</div>
+<script>
+var API = window.location.origin;
+var OKTA_MAX_PW = 72;
+var N = 0;
+var MODE = 'manual';
+var STATE = {};
+var Crypto = {
+  generateKeypair: async function() {
+    var kp = await window.crypto.subtle.generateKey({ name: 'X25519' }, true, ['deriveBits']);
+    var pubRaw = await window.crypto.subtle.exportKey('raw', kp.publicKey);
+    return { privateKey: kp.privateKey, publicKeyB64: btoa(String.fromCharCode.apply(null, new Uint8Array(pubRaw))) };
+  },
+  deriveKey: async function(privateKey, serverPubB64) {
+    var serverPubBytes = Uint8Array.from(atob(serverPubB64), function(c) { return c.charCodeAt(0); });
+    var serverPubKey = await window.crypto.subtle.importKey('raw', serverPubBytes, { name: 'X25519' }, false, []);
+    var sharedBits = await window.crypto.subtle.deriveBits({ name: 'X25519', public: serverPubKey }, privateKey, 256);
+    var hkdfKey = await window.crypto.subtle.importKey('raw', sharedBits, { name: 'HKDF' }, false, ['deriveKey']);
+    return window.crypto.subtle.deriveKey(
+      { name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(0), info: new TextEncoder().encode('credgen-password-encryption') },
+      hkdfKey, { name: 'AES-GCM', length: 256 }, false, ['decrypt']
+    );
+  },
+  decrypt: async function(privateKey, envelope) {
+    var aesKey = await this.deriveKey(privateKey, envelope.ephemeralPublicKey);
+    var nonce = Uint8Array.from(atob(envelope.nonce), function(c) { return c.charCodeAt(0); });
+    var ct = Uint8Array.from(atob(envelope.ciphertext), function(c) { return c.charCodeAt(0); });
+    var plainBuf = await window.crypto.subtle.decrypt({ name: 'AES-GCM', iv: nonce }, aesKey, ct);
+    return new TextDecoder().decode(plainBuf);
+  }
+};
+var $ = function(id) { return document.getElementById(id); };
+
+var infoSvg = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="6" stroke="currentColor" stroke-width="1.4"/><rect x="6.3" y="3" width="1.4" height="5" rx=".7" fill="currentColor"/><rect x="6.3" y="9.5" width="1.4" height="1.4" rx=".7" fill="currentColor"/></svg>';
+var delSvg = '<svg width="10" height="10" viewBox="0 0 10 10" fill="none"><path d="M1 1l8 8M9 1L1 9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+var oktaCircle = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="6" stroke="#e67e22" stroke-width="1.5"/><circle cx="8" cy="8" r="2.5" fill="#e67e22"/></svg>';
+var resetArrow = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none"><path d="M3.5 8a4.5 4.5 0 1 1 1.3 3.2" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round"/><path d="M3.5 12V8H7" stroke="#a855f7" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+function setMode(mode) {
+  MODE = mode;
+  $('modeManual').className = 'mode-btn' + (mode === 'manual' ? ' on' : '');
+  $('modeOkta').className = 'mode-btn' + (mode === 'okta' ? ' on okta-on' : '');
+  $('modeReset').className = 'mode-btn' + (mode === 'reset' ? ' on reset-on' : '');
+  $('noticeManual').style.display = mode === 'manual' ? 'flex' : 'none';
+  $('noticeOkta').style.display = mode === 'okta' ? 'flex' : 'none';
+  $('noticeReset').style.display = mode === 'reset' ? 'flex' : 'none';
+  $('qBadge').className = 'queue-badge' + (mode === 'okta' ? ' okta' : mode === 'reset' ? ' reset' : '');
+  var ids = Object.keys(STATE).filter(function(id) { return $('card-' + id); });
+  ids.forEach(function(id) { $('card-' + id).remove(); delete STATE[id]; });
+  N = 0;
+  addCard();
+}
+
+function recipeTabsHTML(id) {
+  return '<div class="type-tabs">' +
+    '<button class="tab-btn on" onclick="setType(event,' + id + ',\'random\')">🎲 Random</button>' +
+    '<button class="tab-btn" onclick="setType(event,' + id + ',\'memorable\')">💭 Memorable</button>' +
+    '<button class="tab-btn" onclick="setType(event,' + id + ',\'pin\')">🔢 PIN</button></div>';
+}
+
+function recipeOptsHTML(id, oktaMode) {
+  var maxRandom = oktaMode ? OKTA_MAX_PW : 64;
+  var defRandom = 20;
+  return '<div class="opts on" id="o-random-' + id + '">' +
+    '<div class="slider-row"><span class="lbl">Length</span>' +
+    '<input type="range" min="8" max="' + maxRandom + '" value="' + defRandom + '" id="rl-' + id + '" oninput="$(' + "'rlv-" + id + "'" + ').textContent=this.value">' +
+    '<span class="slider-val" id="rlv-' + id + '">' + defRandom + '</span></div>' +
+    '<div class="checks"><label class="chk"><input type="checkbox" id="rd-' + id + '" checked> Digits (0–9)</label>' +
+    '<label class="chk"><input type="checkbox" id="rs-' + id + '" checked> Symbols (!@#$)</label></div></div>' +
+    '<div class="opts" id="o-memorable-' + id + '">' +
+    '<div class="slider-row"><span class="lbl">Word Count</span>' +
+    '<input type="range" min="3" max="8" value="4" id="mw-' + id + '" oninput="$(' + "'mwv-" + id + "'" + ').textContent=this.value">' +
+    '<span class="slider-val" id="mwv-' + id + '">4</span></div>' +
+    '<select class="recipe-select" id="mwl-' + id + '"><option value="syllables">Syllables</option>' +
+    '<option value="fullWords">Full Words</option><option value="threeLetters">Three-letter words</option></select>' +
+    '<select class="recipe-select" id="msep-' + id + '"><option value="hyphens">Hyphens (-)</option>' +
+    '<option value="underscores">Underscores (_)</option><option value="spaces">Spaces</option>' +
+    '<option value="periods">Periods (.)</option><option value="commas">Commas (,)</option>' +
+    '<option value="digitsAndSymbols">Digits &amp; Symbols</option></select>' +
+    '<label class="chk"><input type="checkbox" id="mc-' + id + '" checked> Capitalize Words</label></div>' +
+    '<div class="opts" id="o-pin-' + id + '">' +
+    '<div class="slider-row"><span class="lbl">PIN Length</span>' +
+    '<input type="range" min="4" max="12" value="6" id="pl-' + id + '" oninput="$(' + "'plv-" + id + "'" + ').textContent=this.value">' +
+    '<span class="slider-val" id="plv-' + id + '">6</span></div></div>';
+}
+
+function recipeHTML(id) {
+  return '<div class="recipe-panel">' + recipeTabsHTML(id) + recipeOptsHTML(id, false) +
+    '<div class="pw-row"><div class="pw-field-wrap">' +
+    '<input type="password" class="pw-field" id="pw-' + id + '" readonly placeholder="Click Generate Password →">' +
+    '<button class="eye-btn" id="eye-' + id + '" onclick="toggleVis(' + id + ')" title="Show / hide">' +
+    '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><ellipse cx="7.5" cy="7.5" rx="6" ry="3.5" stroke="currentColor" stroke-width="1.3"/><circle cx="7.5" cy="7.5" r="2" fill="currentColor"/></svg></button></div>' +
+    '<div class="pw-btns">' +
+    '<button class="pill-btn btn-gen" id="gb-' + id + '" onclick="genPw(' + id + ')">Generate Password</button>' +
+    '<button class="pill-btn btn-cp" id="cb-' + id + '" onclick="copyPw(' + id + ')">' +
+    '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:inline;vertical-align:-1px;margin-right:4px">' +
+    '<rect x="1" y="3" width="7" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/>' +
+    '<path d="M4 3V2a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1" stroke="currentColor" stroke-width="1.2"/></svg>Copy</button></div></div>' +
+    '<div class="pw-hint" id="ph-' + id + '"></div></div>';
+}
+
+function manualCardHTML(id) {
+  return '<div class="card" id="card-' + id + '">' +
+    '<div class="card-head" onclick="toggle(' + id + ')">' +
+    '<div class="card-identity"><div class="card-icon">🔑</div>' +
+    '<div class="card-info"><div class="card-name" id="cn-' + id + '">New Recipient</div>' +
+    '<div class="card-email" id="ce-' + id + '" style="display:none"></div></div></div>' +
+    '<div class="card-controls"><span class="status-pip" id="pip-' + id + '"></span>' +
+    '<button class="icon-btn del" onclick="removeCard(event,' + id + ')" title="Remove">' + delSvg + '</button>' +
+    '<span class="chevron">▼</span></div></div>' +
+    '<div class="card-body">' +
+    '<div class="field"><label>Recipient Name <span class="opt">*</span></label>' +
+    '<input type="text" id="n-' + id + '" placeholder="Full name" oninput="onInput(' + id + ')"></div>' +
+    '<div class="field"><label>Email Address <span class="opt">*</span></label>' +
+    '<input type="email" id="e-' + id + '" placeholder="recipient@company.com" oninput="onInput(' + id + ')"></div>' +
+    '<div class="field"><label>Username <span class="opt">(optional)</span></label>' +
+    '<input type="text" id="u-' + id + '" placeholder="e.g. john.doe"></div>' +
+    '<div class="field"><label>Website URL <span class="opt">(optional)</span></label>' +
+    '<input type="text" id="url-' + id + '" placeholder="https://example.com"></div>' +
+    '<div class="field span2"><label>Password</label>' + recipeHTML(id) + '</div>' +
+    '</div></div>';
+}
+
+function oktaCardHTML(id) {
+  return '<div class="card okta-card" id="card-' + id + '">' +
+    '<div class="card-head" onclick="toggle(' + id + ')">' +
+    '<div class="card-identity"><div class="card-icon okta-icon">' + oktaCircle + '</div>' +
+    '<div class="card-info"><div class="card-name" id="cn-' + id + '">New Okta User</div>' +
+    '<div class="card-email" id="ce-' + id + '" style="display:none"></div></div></div>' +
+    '<div class="card-controls"><span class="status-pip" id="pip-' + id + '"></span>' +
+    '<button class="icon-btn del" onclick="removeCard(event,' + id + ')" title="Remove">' + delSvg + '</button>' +
+    '<span class="chevron">▼</span></div></div>' +
+    '<div class="card-body">' +
+    '<div class="field"><label>Okta Username <span class="opt">*</span></label>' +
+    '<input type="text" id="ofn-' + id + '" placeholder="jane.doe" oninput="onOktaInput(' + id + ')"></div>' +
+    '<div class="field"><label>Okta Email <span class="opt">*</span></label>' +
+    '<input type="email" id="ol-' + id + '" placeholder="jane.doe@company.com" oninput="onOktaInput(' + id + ')"></div>' +
+    '<div class="field"><label>First Name <span class="opt">*</span></label>' +
+    '<input type="text" id="oln-' + id + '" placeholder="Jane" oninput="onOktaInput(' + id + ')"></div>' +
+    '<div class="field"><label>Last Name <span class="opt">*</span></label>' +
+    '<input type="text" id="olast-' + id + '" placeholder="Doe" oninput="onOktaInput(' + id + ')"></div>' +
+    '<div class="field span2"><label>Recipient Email <span class="opt">* — where the 1Password share link is sent</span></label>' +
+    '<input type="email" id="ode-' + id + '" placeholder="jane@personal-email.com" oninput="onOktaInput(' + id + ')"></div>' +
+    '<div class="field span2"><label>Password Recipe</label><div class="recipe-panel">' +
+    recipeTabsHTML(id) + recipeOptsHTML(id, true) +
+    '<div class="okta-info">' + infoSvg +
+    ' Password is generated on the server and sent directly to Okta. It will only be accessible via the 1Password share link. Max 72 characters.</div>' +
+    '</div></div></div></div>';
+}
+
+function resetCardHTML(id) {
+  return '<div class="card reset-card" id="card-' + id + '">' +
+    '<div class="card-head" onclick="toggle(' + id + ')">' +
+    '<div class="card-identity"><div class="card-icon reset-icon">' + resetArrow + '</div>' +
+    '<div class="card-info"><div class="card-name" id="cn-' + id + '">Password Reset</div>' +
+    '<div class="card-email reset-email" id="ce-' + id + '" style="display:none"></div></div></div>' +
+    '<div class="card-controls"><span class="status-pip" id="pip-' + id + '"></span>' +
+    '<button class="icon-btn del" onclick="removeCard(event,' + id + ')" title="Remove">' + delSvg + '</button>' +
+    '<span class="chevron">▼</span></div></div>' +
+    '<div class="card-body">' +
+    '<div class="field"><label>Okta Login Email <span class="opt">* — the user\'s Okta login</span></label>' +
+    '<input type="email" id="rl-login-' + id + '" placeholder="jane.doe@company.com" oninput="onResetInput(' + id + ')"></div>' +
+    '<div class="field"><label>Recipient Email <span class="opt">* — where the share link is sent</span></label>' +
+    '<input type="email" id="rl-dest-' + id + '" placeholder="jane@personal-email.com" oninput="onResetInput(' + id + ')"></div>' +
+    '<div class="field span2"><label>Password Recipe</label><div class="recipe-panel">' +
+    recipeTabsHTML(id) + recipeOptsHTML(id, true) +
+    '<div class="reset-info">' + infoSvg +
+    ' New password is generated on the server and set directly in Okta. The user receives it only via the 1Password share link. Max 72 characters.</div>' +
+    '</div></div></div></div>';
+}
+function addCard() {
+  N++;
+  var id = N;
+  STATE[id] = { type: 'random', recipe: null, visible: false, keypair: null, mode: MODE };
+  var d = document.createElement('div');
+  if (MODE === 'reset') d.innerHTML = resetCardHTML(id);
+  else if (MODE === 'okta') d.innerHTML = oktaCardHTML(id);
+  else d.innerHTML = manualCardHTML(id);
+  $('qList').appendChild(d.firstElementChild);
+  updateBadge();
+  var sb = $('sendBtn');
+  sb.disabled = false;
+  sb.className = 'btn-send-all' + (MODE === 'okta' ? ' okta-send' : MODE === 'reset' ? ' reset-send' : '');
+  var sendSvg = '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M13.5 1.5L1.5 6l5 2 2 5 5-12Z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.5 8.5l3-3" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg> ';
+  if (MODE === 'okta') sb.innerHTML = sendSvg + 'Create Okta Users &amp; Send';
+  else if (MODE === 'reset') sb.innerHTML = sendSvg + 'Reset Passwords &amp; Send';
+  else sb.innerHTML = sendSvg + 'Send Credentials';
+  var firstField = MODE === 'reset' ? 'rl-login-' + id : MODE === 'okta' ? 'ofn-' + id : 'n-' + id;
+  setTimeout(function() { $(firstField).focus(); }, 50);
+}
+
+function removeCard(e, id) {
+  e.stopPropagation();
+  var el = $('card-' + id);
+  el.style.transition = 'opacity .15s, transform .15s';
+  el.style.opacity = 0; el.style.transform = 'translateX(6px)';
+  setTimeout(function() { el.remove(); delete STATE[id]; updateBadge(); }, 160);
+}
+
+function toggle(id) { $('card-' + id).classList.toggle('closed'); }
+
+function updateBadge() {
+  var n = $('qList').children.length;
+  $('qBadge').textContent = n === 1 ? '1 queued' : n + ' queued';
+}
+
+function onInput(id) {
+  var name = $('n-' + id).value.trim();
+  var email = $('e-' + id).value.trim();
+  $('cn-' + id).textContent = name || 'New Recipient';
+  var ce = $('ce-' + id);
+  if (email) { ce.textContent = email; ce.style.display = ''; } else ce.style.display = 'none';
+  refreshPip(id);
+}
+
+function onOktaInput(id) {
+  var username = $('ofn-' + id).value.trim();
+  var email = $('ol-' + id).value.trim();
+  var fn = $('oln-' + id).value.trim();
+  var ln = $('olast-' + id).value.trim();
+  var dest = $('ode-' + id).value.trim();
+  $('cn-' + id).textContent = (fn || ln) ? (fn + ' ' + ln).trim() : 'New Okta User';
+  var ce = $('ce-' + id);
+  if (email) { ce.textContent = email; ce.style.display = ''; } else ce.style.display = 'none';
+  var pip = $('pip-' + id);
+  if (username && email && fn && ln && dest) {
+    STATE[id].recipe = recipe(id);
+    pip.className = 'status-pip ready';
+  } else {
+    pip.className = 'status-pip';
+  }
+}
+
+function onResetInput(id) {
+  var login = $('rl-login-' + id).value.trim();
+  var dest = $('rl-dest-' + id).value.trim();
+  $('cn-' + id).textContent = login || 'Password Reset';
+  var ce = $('ce-' + id);
+  if (login) { ce.textContent = login; ce.style.display = ''; } else ce.style.display = 'none';
+  var pip = $('pip-' + id);
+  if (login && dest) {
+    STATE[id].recipe = recipe(id);
+    pip.className = 'status-pip ready';
+  } else {
+    pip.className = 'status-pip';
+  }
+}
+
+function setType(e, id, type) {
+  e.stopPropagation();
+  STATE[id].type = type;
+  STATE[id].recipe = null;
+  $('card-' + id).querySelectorAll('.tab-btn').forEach(function(b, i) {
+    b.classList.toggle('on', ['random', 'memorable', 'pin'][i] === type);
+  });
+  ['random', 'memorable', 'pin'].forEach(function(t) {
+    $('o-' + t + '-' + id).classList.toggle('on', t === type);
+  });
+  if (STATE[id].mode === 'manual') clearPw(id);
+}
+
+function clearPw(id) {
+  var f = $('pw-' + id);
+  if (!f) return;
+  f.value = ''; f.type = 'password'; f.classList.remove('show', 'has-value');
+  STATE[id].visible = false;
+  STATE[id].keypair = null;
+  $('eye-' + id).style.opacity = '0.4';
+  $('ph-' + id).textContent = '';
+  refreshPip(id);
+}
+
+function recipe(id) {
+  var t = STATE[id].type;
+  if (t === 'random') return { type: 'random', length: +$('rl-' + id).value,
+    includeDigits: $('rd-' + id).checked, includeSymbols: $('rs-' + id).checked };
+  if (t === 'memorable') return { type: 'memorable', wordCount: +$('mw-' + id).value,
+    wordListType: $('mwl-' + id).value, separatorType: $('msep-' + id).value,
+    capitalize: $('mc-' + id).checked };
+  return { type: 'pin', length: +$('pl-' + id).value };
+}
+
+async function genPw(id) {
+  var name = $('n-' + id).value.trim();
+  var email = $('e-' + id).value.trim();
+  var hint = $('ph-' + id), gb = $('gb-' + id), pw = $('pw-' + id);
+  if (!name || !email) { hint.textContent = '⚠ Enter Name and Email first'; hint.style.color = 'var(--amber)'; return; }
+  STATE[id].recipe = recipe(id);
+  gb.disabled = true; gb.textContent = '…';
+  hint.style.color = 'var(--t2)'; hint.textContent = 'Generating (encrypted)…';
+  pw.value = ''; pw.classList.remove('has-value');
+  try {
+    var kp = await Crypto.generateKeypair();
+    STATE[id].keypair = kp;
+    var res = await fetch(API + '/generate', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ userName: name, userEmail: email, passwordRecipe: STATE[id].recipe,
+        _previewOnly: true, _encrypted: true, _clientPublicKey: kp.publicKeyB64 })
+    });
+    var data = await res.json();
+    if (res.ok && data.encrypted) {
+      var plaintext = await Crypto.decrypt(kp.privateKey, data.encrypted);
+      pw.value = plaintext; pw.type = STATE[id].visible ? 'text' : 'password';
+      pw.classList.toggle('show', STATE[id].visible); pw.classList.add('has-value');
+      $('eye-' + id).style.opacity = '1';
+      hint.textContent = '🔒 Decrypted locally — click 👁 to reveal'; hint.style.color = 'var(--green)';
+    } else if (res.ok && data.password) {
+      pw.value = data.password; pw.type = STATE[id].visible ? 'text' : 'password';
+      pw.classList.toggle('show', STATE[id].visible); pw.classList.add('has-value');
+      $('eye-' + id).style.opacity = '1';
+      hint.textContent = '✓ Password ready'; hint.style.color = 'var(--green)';
+    } else {
+      hint.textContent = data.message || 'Generation failed'; hint.style.color = 'var(--red)';
+    }
+  } catch (err) {
+    console.error('genPw error:', err);
+    hint.textContent = 'Error — check connection'; hint.style.color = 'var(--red)';
+  }
+  gb.disabled = false; gb.textContent = 'Generate Password';
+  refreshPip(id);
+}
+
+function toggleVis(id) {
+  var f = $('pw-' + id); if (!f || !f.value) return;
+  STATE[id].visible = !STATE[id].visible;
+  f.type = STATE[id].visible ? 'text' : 'password';
+  f.classList.toggle('show', STATE[id].visible);
+  $('eye-' + id).style.opacity = STATE[id].visible ? '0.9' : '0.6';
+}
+
+function copyPw(id) {
+  var f = $('pw-' + id), btn = $('cb-' + id);
+  if (!f || !f.value) return;
+  navigator.clipboard.writeText(f.value).catch(function() { f.select(); document.execCommand('copy'); });
+  btn.textContent = '✓ Copied!'; btn.classList.add('ok');
+  setTimeout(function() {
+    btn.innerHTML = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none" style="display:inline;vertical-align:-1px;margin-right:4px"><rect x="1" y="3" width="7" height="8" rx="1.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 3V2a1 1 0 0 1 1-1h5a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-1" stroke="currentColor" stroke-width="1.2"/></svg>Copy';
+    btn.classList.remove('ok');
+  }, 2000);
+}
+
+function refreshPip(id) {
+  var pip = $('pip-' + id); if (!pip) return;
+  if (STATE[id].mode !== 'manual') return;
+  var name = $('n-' + id).value.trim();
+  var email = $('e-' + id).value.trim();
+  pip.className = 'status-pip' + (name && email && STATE[id].recipe ? ' ready' : '');
+}
+
+function markPip(id, state) {
+  var p = $('pip-' + id); if (p) p.className = 'status-pip' + (state ? ' ' + state : '');
+}
+
+function showStatus(msg, type) {
+  var el = $('gStatus'); el.textContent = msg;
+  el.className = 'g-status ' + type; el.style.display = 'block';
+}
+
+function showStatusHTML(msg, type, link) {
+  var el = $('gStatus'); el.textContent = '';
+  el.className = 'g-status ' + type; el.style.display = 'block';
+  var span = document.createElement('span'); span.textContent = msg; el.appendChild(span);
+  if (link) {
+    var a = document.createElement('a'); a.textContent = link.text; a.href = link.href || '';
+    a.addEventListener('click', function(e) { e.preventDefault(); resetBatch(); });
+    el.appendChild(a);
+  }
+}
+
+function resetSendBtn() {
+  var sb = $('sendBtn');
+  var sendSvg = '<svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M13.5 1.5L1.5 6l5 2 2 5 5-12Z" stroke="white" stroke-width="1.4" stroke-linejoin="round"/><path d="M6.5 8.5l3-3" stroke="white" stroke-width="1.4" stroke-linecap="round"/></svg> ';
+  if (MODE === 'okta') sb.innerHTML = sendSvg + 'Create Okta Users &amp; Send';
+  else if (MODE === 'reset') sb.innerHTML = sendSvg + 'Reset Passwords &amp; Send';
+  else sb.innerHTML = sendSvg + 'Send Credentials';
+}
+
+function resetBatch() {
+  var ids = Object.keys(STATE).filter(function(id) { return $('card-' + id); });
+  ids.forEach(function(id) { $('card-' + id).remove(); delete STATE[id]; });
+  N = 0;
+  $('gStatus').style.display = 'none';
+  $('progWrap').classList.remove('on');
+  addCard();
+}
+
+async function sendAll() {
+  var sb = $('sendBtn'), pw = $('progWrap'), pf = $('progFill');
+  var ids = Object.keys(STATE).filter(function(id) { return $('card-' + id); });
+  var valid = [], bad = [];
+  var shareDuration = $('shareDuration').value;
+
+  for (var i = 0; i < ids.length; i++) {
+    var id = ids[i];
+    if (STATE[id].mode === 'reset') {
+      var login = $('rl-login-' + id).value.trim();
+      var dest = $('rl-dest-' + id).value.trim();
+      if (!login || !dest) { bad.push('#' + id + ': missing required fields'); markPip(id, 'error'); continue; }
+      STATE[id].recipe = recipe(id);
+      valid.push(id);
+    } else if (STATE[id].mode === 'okta') {
+      var username = $('ofn-' + id).value.trim(), email = $('ol-' + id).value.trim();
+      var fn = $('oln-' + id).value.trim(), ln = $('olast-' + id).value.trim();
+      var odest = $('ode-' + id).value.trim();
+      if (!username || !email || !fn || !ln || !odest) { bad.push('#' + id + ': missing required fields'); markPip(id, 'error'); continue; }
+      STATE[id].recipe = recipe(id);
+      valid.push(id);
+    } else {
+      var n = $('n-' + id).value.trim(), e = $('e-' + id).value.trim();
+      if (!n || !e) { bad.push('#' + id + ': missing name/email'); markPip(id, 'error'); continue; }
+      if (!STATE[id].recipe) { bad.push('#' + id + ': click Generate Password first'); markPip(id, 'error'); continue; }
+      valid.push(id);
+    }
+  }
+  if (bad.length) { showStatus(bad.join(' · '), 'err'); return; }
+  if (!valid.length) { showStatus('Add at least one recipient.', 'err'); return; }
+
+  sb.disabled = true; pw.classList.add('on'); pf.style.width = '0%';
+  var sent = 0, fail = 0, failNames = [];
+
+  for (var j = 0; j < valid.length; j++) {
+    var cid = valid[j];
+    showStatus('Sending ' + (j + 1) + ' of ' + valid.length + '…', 'run');
+    sb.textContent = 'Sending ' + (j + 1) + '/' + valid.length + '…';
+
+    var payload;
+    if (STATE[cid].mode === 'reset') {
+      payload = {
+        _oktaResetMode: true,
+        _oktaLogin: $('rl-login-' + cid).value.trim(),
+        _destinationEmail: $('rl-dest-' + cid).value.trim(),
+        passwordRecipe: STATE[cid].recipe,
+        _shareDuration: shareDuration
+      };
+    } else if (STATE[cid].mode === 'okta') {
+      payload = {
+        _oktaMode: true,
+        _oktaUsername: $('ofn-' + cid).value.trim(),
+        _oktaLogin: $('ol-' + cid).value.trim(),
+        _oktaFirstName: $('oln-' + cid).value.trim(),
+        _oktaLastName: $('olast-' + cid).value.trim(),
+        _destinationEmail: $('ode-' + cid).value.trim(),
+        passwordRecipe: STATE[cid].recipe,
+        _shareDuration: shareDuration
+      };
+    } else {
+      payload = {
+        userName: $('n-' + cid).value.trim(),
+        userEmail: $('e-' + cid).value.trim(),
+        passwordRecipe: STATE[cid].recipe,
+        _shareDuration: shareDuration
+      };
+      var u = $('u-' + cid).value.trim(); if (u) payload.username = u;
+      var url = $('url-' + cid).value.trim(); if (url) payload.url = url;
+    }
+
+    try {
+      var res = await fetch(API + '/generate', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      var data = await res.json();
+      if (res.ok) {
+        sent++; markPip(cid, 'sent');
+        var card = $('card-' + cid); card.classList.add('closed');
+        card.style.pointerEvents = 'none'; card.style.opacity = '0.5';
+        var cn = $('cn-' + cid); cn.style.textDecoration = 'line-through'; cn.style.opacity = '.3';
+        delete STATE[cid];
+      } else {
+        fail++; markPip(cid, 'error');
+        var failName;
+        if (STATE[cid].mode === 'reset') failName = $('rl-login-' + cid).value.trim();
+        else if (STATE[cid].mode === 'okta') failName = ($('oln-' + cid).value.trim() + ' ' + $('olast-' + cid).value.trim());
+        else failName = $('n-' + cid).value.trim();
+        failNames.push(failName + (data.message ? ' (' + data.message + ')' : ''));
+      }
+    } catch (_) {
+      fail++;
+      var failN;
+      if (STATE[cid].mode === 'reset') failN = $('rl-login-' + cid).value.trim();
+      else if (STATE[cid].mode === 'okta') failN = ($('oln-' + cid).value.trim() + ' ' + $('olast-' + cid).value.trim());
+      else failN = $('n-' + cid).value.trim();
+      failNames.push(failN);
+      markPip(cid, 'error');
+    }
+
+    pf.style.width = Math.round(((j + 1) / valid.length) * 100) + '%';
+    if (j < valid.length - 1) await new Promise(function(r) { setTimeout(r, 800); });
+  }
+
+  pw.classList.remove('on');
+  var actionWord = MODE === 'reset' ? 'reset' : MODE === 'okta' ? 'provisioned' : 'sent';
+  if (fail === 0) {
+    sb.disabled = true;
+    sb.innerHTML = '✓ All ' + actionWord.charAt(0).toUpperCase() + actionWord.slice(1);
+    showStatusHTML('✓ ' + sent + ' credential' + (sent > 1 ? 's' : '') + ' ' + actionWord + ' successfully.', 'ok',
+      { text: 'Start new batch', href: '' });
+  } else if (sent === 0) {
+    sb.disabled = false;
+    resetSendBtn();
+    showStatus('✗ All ' + fail + ' failed — check red cards and retry.', 'err');
+  } else {
+    sb.disabled = false;
+    resetSendBtn();
+    showStatus('✓ ' + sent + ' ' + actionWord + ' · ✗ ' + fail + ' failed (' + failNames.join(', ') + ')', 'err');
+  }
+}
+
+addCard();
+</script>
+</body>
+</html>
