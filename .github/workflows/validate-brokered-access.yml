@@ -14,13 +14,6 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
-      # TEMPORARY diagnostic — lists the secret NAMES this repo can see (values
-      # stay masked as ***). Remove once the token is resolving.
-      - name: DEBUG — which secrets reach this repo
-        run: |
-          echo "Secret names available to this workflow (values masked):"
-          echo '${{ toJSON(secrets) }}'
-
       - name: Load secrets from 1Password (Brokered Access)
         uses: 1Password/load-secrets-action@v5beta
         with:
