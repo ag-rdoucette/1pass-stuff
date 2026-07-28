@@ -19,7 +19,7 @@ jobs:
         with:
           export-env: true
         env:
-          OP_WORKLOAD_ID: "YOQHXN7JGNCTRDQUMVCDPDGTXE"
+          OP_WORKLOAD_ID: "OEZOWQ3QCNAOZCZ2AFVFWSSKRQ"
           OP_ENVIRONMENT_ID: "sy7mqjtptbksgtze3i3uirxidi"
           OP_INTEGRATION_KEY: ${{ secrets.OP_INTEGRATION_KEY }}
 
