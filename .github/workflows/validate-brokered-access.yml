@@ -16,10 +16,12 @@ jobs:
     steps:
       - name: Load secrets from 1Password (Brokered Access)
         uses: 1Password/load-secrets-action@v5beta
+        with:
+          export-env: true
         env:
           OP_WORKLOAD_ID: "YOQHXN7JGNCTRDQUMVCDPDGTXE"
           OP_ENVIRONMENT_ID: "sy7mqjtptbksgtze3i3uirxidi"
-          OP_INTEGRATION_KEY: ${{ secrets.OP_BROKERED_ACCESS_TOKEN }}
+          OP_INTEGRATION_KEY: ${{ secrets.OP_INTEGRATION_KEY }}
 
       - name: Confirm Brokered Access succeeded
         run: echo "Brokered Access load step completed — OIDC token accepted and secrets injected."
