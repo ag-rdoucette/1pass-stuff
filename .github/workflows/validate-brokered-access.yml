@@ -8,7 +8,7 @@ on:
 permissions:
   # Required — lets GitHub issue the OIDC token the runner presents to 1Password.
   id-token: write
-  contents: read
+  contents: write
 
 jobs:
   validate:
